@@ -21,8 +21,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # SPAでルーターを使うなら index.html を 404.html に複製（任意）
-      - name: SPA fallback (optional)
+      # リポジトリ直下の静的ファイルをそのまま公開用にコピー
+      # SPA（ルーター使用時）は index.html を 404.html にも複製
+      - name: Prepare dist
         run: |
           mkdir -p dist
           cp -r ./* dist/
