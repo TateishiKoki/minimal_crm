@@ -935,26 +935,26 @@
                 <div class="nav-section-title">メイン</div>
                 <ul class="nav-menu">
                     <li class="nav-item">
-                        <a href="#" class="nav-link active" data-page="dashboard">
+                        <a href="#/dashboard" class="nav-link active" data-page="dashboard">
                             <span class="material-icons-outlined">dashboard</span>
                             <span>ダッシュボード</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="opportunities">
+                        <a href="#/opportunities" class="nav-link" data-page="opportunities">
                             <span class="material-icons-outlined">work</span>
                             <span>商談管理</span>
                             <span class="nav-badge">5</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="accounts">
+                        <a href="#/accounts" class="nav-link" data-page="accounts">
                             <span class="material-icons-outlined">business</span>
                             <span>取引先</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="contacts">
+                        <a href="#/contacts" class="nav-link" data-page="contacts">
                             <span class="material-icons-outlined">contacts</span>
                             <span>担当者</span>
                         </a>
@@ -966,19 +966,19 @@
                 <div class="nav-section-title">営業活動</div>
                 <ul class="nav-menu">
                     <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="activities">
+                        <a href="#/activities" class="nav-link" data-page="activities">
                             <span class="material-icons-outlined">event</span>
                             <span>活動履歴</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="proposals">
+                        <a href="#/proposals" class="nav-link" data-page="proposals">
                             <span class="material-icons-outlined">description</span>
                             <span>提案書管理</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="quotes">
+                        <a href="#/quotes" class="nav-link" data-page="quotes">
                             <span class="material-icons-outlined">request_quote</span>
                             <span>見積管理</span>
                         </a>
@@ -990,13 +990,13 @@
                 <div class="nav-section-title">分析</div>
                 <ul class="nav-menu">
                     <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="reports">
+                        <a href="#/reports" class="nav-link" data-page="reports">
                             <span class="material-icons-outlined">analytics</span>
                             <span>レポート</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="forecast">
+                        <a href="#/forecast" class="nav-link" data-page="forecast">
                             <span class="material-icons-outlined">show_chart</span>
                             <span>売上予測</span>
                         </a>
@@ -1461,19 +1461,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             renderOpportunityTable();
             initializeEventListeners();
+            if (!location.hash) location.hash = '#/dashboard';
+            handleRoute();
         });
+
 
         // イベントリスナー初期化
         function initializeEventListeners() {
-            // ナビゲーション
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const page = link.dataset.page;
-                    navigateToPage(page);
-                });
-            });
-
+    
             // FABメニュー
             const fabButton = document.getElementById('fabButton');
             const fabMenu = document.getElementById('fabMenu');
@@ -1991,6 +1986,59 @@
                 </div>
             `;
         }
+// ===== Router（#/xxx で画面切替） =====
+const ROUTES = ["dashboard","opportunities","accounts","contacts","activities","proposals","quotes","reports","forecast"];
+
+window.addEventListener("hashchange", handleRoute);
+
+function handleRoute() {
+  const page = (location.hash.replace("#/","") || "dashboard");
+  const target = ROUTES.includes(page) ? page : "dashboard";
+
+  // 左メニュー active 切り替え
+  document.querySelectorAll(".nav-link").forEach(a => {
+    a.classList.toggle("active", a.dataset.page === target);
+  });
+
+  // タイトル更新
+  const titles = {
+    dashboard:{icon:"dashboard", text:"ダッシュボード"},
+    opportunities:{icon:"work", text:"商談管理"},
+    accounts:{icon:"business", text:"取引先"},
+    contacts:{icon:"contacts", text:"担当者"},
+    activities:{icon:"event", text:"活動履歴"},
+    proposals:{icon:"description", text:"提案書管理"},
+    quotes:{icon:"request_quote", text:"見積管理"},
+    reports:{icon:"analytics", text:"レポート"},
+    forecast:{icon:"show_chart", text:"売上予測"}
+  };
+  const t = titles[target];
+  document.getElementById("pageTitle").innerHTML =
+    `<span class="material-icons-outlined">${t.icon}</span>${t.text}`;
+
+  // 画面本体の切替
+  updateContent(target);
+}
+
+// 既存の updateContent を上書き（このままでOK）
+function updateContent(page) {
+  const dash = document.getElementById('dashboardContent');
+  if (dash) dash.style.display = 'none';
+
+  switch(page) {
+    case 'dashboard': if (dash) dash.style.display = 'block'; break;
+    case 'opportunities': renderOpportunitiesPage(); break;
+    case 'accounts':      renderAccountsPage();      break;
+    case 'contacts':      renderContactsPage();      break;
+    case 'activities':    renderActivitiesPage();    break;
+    case 'proposals':     renderProposalsPage();     break;
+    case 'quotes':        renderQuotesPage();        break;
+    case 'reports':       renderReportsPage();       break;
+    case 'forecast':      renderForecastPage();      break;
+  }
+}
+
+
     </script>
 </body>
 </html>
