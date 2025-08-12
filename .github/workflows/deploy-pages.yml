@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy static site to GitHub Pages
 
 on:
   push:
@@ -21,20 +21,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      # SPA（ルーター使用時の404対策）。不要なら残してOK（失敗しないよう || true を付与）
+      # SPAでルーターを使うなら index.html を 404.html に複製（任意）
       - name: SPA fallback (optional)
-        run: cp dist/index.html dist/404.html || true
+        run: |
+          mkdir -p dist
+          cp -r ./* dist/
+          [ -f dist/index.html ] && cp dist/index.html dist/404.html || true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
