@@ -1,0 +1,37 @@
+{
+  "name": "minimal-crm",
+  "version": "1.0.0",
+  "description": "A minimal CRM system inspired by Salesforce with modern UI/UX",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p 8080",
+    "dev": "npx http-server -p 8080 -c-1",
+    "build": "echo 'No build process required for static files'",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/minimal-crm.git"
+  },
+  "keywords": [
+    "crm",
+    "sales",
+    "management",
+    "dashboard",
+    "javascript",
+    "html5",
+    "css3"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yourusername/minimal-crm/issues"
+  },
+  "homepage": "https://github.com/yourusername/minimal-crm#readme",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
