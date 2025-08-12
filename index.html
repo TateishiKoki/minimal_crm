@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MinimalCRM - 営業管理システム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #5E3AEE;
+            --primary-dark: #4829CC;
+            --secondary: #FF6B35;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --dark: #1F2937;
+            --gray: #6B7280;
+            --light: #F9FAFB;
+            --white: #FFFFFF;
+            --shadow: 0 1px 3px rgba(0,0,0,0.12);
+            --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+            --radius: 12px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--dark);
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            background: var(--white);
+        }
+
+        /* サイドバー */
+        .sidebar {
+            width: 260px;
+            background: var(--dark);
+            padding: 2rem 1rem;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .logo {
+            color: var(--white);
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo::before {
+            content: "◆";
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            color: #9CA3AF;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-link::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--primary);
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(94, 58, 238, 0.1);
+            color: var(--white);
+        }
+
+        .nav-link.active::before {
+            transform: translateX(0);
+        }
+
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            opacity: 0.8;
+        }
+
+        /* メインコンテンツ */
+        .main-content {
+            flex: 1;
+            background: var(--light);
+            overflow-y: auto;
+        }
+
+        .header {
+            background: var(--white);
+            padding: 1.5rem 2rem;
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-input {
+            padding: 0.5rem 1rem 0.5rem 2.5rem;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            width: 300px;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(94, 58, 238, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray);
+        }
+
+        .btn {
+            padding: 0.5rem 1.25rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(94, 58, 238, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--white);
+            color: var(--gray);
+            border: 1px solid #E5E7EB;
+        }
+
+        .btn-secondary:hover {
+            background: var(--light);
+        }
+
+        /* コンテンツエリア */
+        .content {
+            padding: 2rem;
+        }
+
+        /* ダッシュボード統計カード */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--white);
+            padding: 1.5rem;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-label {
+            color: var(--gray);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-change {
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .stat-change.positive {
+            color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .stat-change.negative {
+            color: var(--danger);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* テーブル */
+        .data-table {
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #E5E7EB;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: var(--light);
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            color: var(--gray);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #E5E7EB;
+        }
+
+        tbody tr {
+            transition: all 0.2s ease;
+        }
+
+        tbody tr:hover {
+            background: var(--light);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-new {
+            background: rgba(94, 58, 238, 0.1);
+            color: var(--primary);
+        }
+
+        .status-qualified {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .status-proposal {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .status-negotiation {
+            background: rgba(255, 107, 53, 0.1);
+            color: var(--secondary);
+        }
+
+        /* モーダル */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--white);
+            border-radius: var(--radius);
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #E5E7EB;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--gray);
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .modal-close:hover {
+            color: var(--dark);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--dark);
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(94, 58, 238, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid #E5E7EB;
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+
+        /* チャート */
+        .chart-container {
+            background: var(--white);
+            padding: 1.5rem;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        .chart-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .chart-subtitle {
+            color: var(--gray);
+            font-size: 0.875rem;
+        }
+
+        .chart {
+            height: 300px;
+            display: flex;
+            align-items: flex-end;
+            gap: 1rem;
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(180deg, var(--primary), var(--secondary));
+            border-radius: 8px 8px 0 0;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .chart-bar:hover {
+            transform: translateY(-5px);
+            filter: brightness(1.1);
+        }
+
+        .chart-bar-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            color: var(--gray);
+            white-space: nowrap;
+        }
+
+        .chart-bar-value {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: 600;
+            color: var(--dark);
+            white-space: nowrap;
+        }
+
+        /* アニメーション */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: -260px;
+                height: 100vh;
+                z-index: 1000;
+            }
+
+            .sidebar.active {
+                left: 0;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .search-input {
+                width: 150px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--light);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--dark);
+        }
+
+        /* タブ */
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .tab {
+            padding: 1rem 1.5rem;
+            background: none;
+            border: none;
+            color: var(--gray);
+            font-weight: 500;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .tab::after {
+            content: "";
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--primary);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .tab:hover {
+            color: var(--dark);
+        }
+
+        .tab.active {
+            color: var(--primary);
+        }
+
+        .tab.active::after {
+            transform: scaleX(1);
+        }
+
+        /* アクティビティフィード */
+        .activity-feed {
+            background: var(--white);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        .activity-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem 0;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .activity-icon.warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .activity-icon.info {
+            background: rgba(94, 58, 238, 0.1);
+            color: var(--primary);
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .activity-time {
+            font-size: 0.875rem;
+            color: var(--gray);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- サイドバー -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">MinimalCRM</div>
+            <nav>
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a href="#" class="nav-link active" data-page="dashboard">
+                            <span class="nav-icon">📊</span>
+                            <span>ダッシュボード</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="leads">
+                            <span class="nav-icon">👥</span>
+                            <span>リード管理</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="opportunities">
+                            <span class="nav-icon">💼</span>
+                            <span>商談管理</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="accounts">
+                            <span class="nav-icon">🏢</span>
+                            <span>取引先</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="contacts">
+                            <span class="nav-icon">📇</span>
+                            <span>連絡先</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="activities">
+                            <span class="nav-icon">📅</span>
+                            <span>活動</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="reports">
+                            <span class="nav-icon">📈</span>
+                            <span>レポート</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="settings">
+                            <span class="nav-icon">⚙️</span>
+                            <span>設定</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- ヘッダー -->
+            <header class="header">
+                <h1 class="header-title" id="pageTitle">ダッシュボード</h1>
+                <div class="header-actions">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-input" placeholder="検索...">
+                    </div>
+                    <button class="btn btn-secondary">
+                        <span>🔔</span>
+                        <span>通知</span>
+                    </button>
+                    <button class="btn btn-primary" id="addNewBtn">
+                        <span>＋</span>
+                        <span>新規追加</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- コンテンツエリア -->
+            <div class="content" id="content">
+                <!-- ダッシュボード -->
+                <div id="dashboardContent">
+                    <!-- 統計カード -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">総リード数</div>
+                            <div class="stat-value">1,234</div>
+                            <div class="stat-change positive">
+                                <span>↑</span>
+                                <span>12% 前月比</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">進行中の商談</div>
+                            <div class="stat-value">56</div>
+                            <div class="stat-change positive">
+                                <span>↑</span>
+                                <span>8% 前月比</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">成約率</div>
+                            <div class="stat-value">23.5%</div>
+                            <div class="stat-change negative">
+                                <span>↓</span>
+                                <span>2% 前月比</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">月間売上</div>
+                            <div class="stat-value">¥8.2M</div>
+                            <div class="stat-change positive">
+                                <span>↑</span>
+                                <span>15% 前月比</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 売上チャート -->
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h2 class="chart-title">月別売上推移</h2>
+                            <p class="chart-subtitle">2024年度売上実績</p>
+                        </div>
+                        <div class="chart">
+                            <div class="chart-bar" style="height: 60%">
+                                <span class="chart-bar-value">¥6.2M</span>
+                                <span class="chart-bar-label">1月</span>
+                            </div>
+                            <div class="chart-bar" style="height: 75%">
+                                <span class="chart-bar-value">¥7.5M</span>
+                                <span class="chart-bar-label">2月</span>
+                            </div>
+                            <div class="chart-bar" style="height: 80%">
+                                <span class="chart-bar-value">¥8.0M</span>
+                                <span class="chart-bar-label">3月</span>
+                            </div>
+                            <div class="chart-bar" style="height: 65%">
+                                <span class="chart-bar-value">¥6.5M</span>
+                                <span class="chart-bar-label">4月</span>
+                            </div>
+                            <div class="chart-bar" style="height: 82%">
+                                <span class="chart-bar-value">¥8.2M</span>
+                                <span class="chart-bar-label">5月</span>
+                            </div>
+                            <div class="chart-bar" style="height: 90%">
+                                <span class="chart-bar-value">¥9.0M</span>
+                                <span class="chart-bar-label">6月</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 最近の活動 -->
+                    <div class="activity-feed">
+                        <h2 class="chart-title" style="margin-bottom: 1rem;">最近の活動</h2>
+                        <div class="activity-item">
+                            <div class="activity-icon success">✓</div>
+                            <div class="activity-content">
+                                <div class="activity-title">新規商談成立 - 株式会社ABC</div>
+                                <div class="activity-time">2時間前</div>
+                            </div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-icon info">📝</div>
+                            <div class="activity-content">
+                                <div class="activity-title">見積書送付 - XYZ商事</div>
+                                <div class="activity-time">5時間前</div>
+                            </div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-icon warning">📞</div>
+                            <div class="activity-content">
+                                <div class="activity-title">フォローアップコール予定 - 田中様</div>
+                                <div class="activity-time">1日前</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 商談テーブル（デフォルト非表示） -->
+                <div id="opportunitiesContent" style="display: none;">
+                    <div class="tabs">
+                        <button class="tab active">すべて</button>
+                        <button class="tab">新規</button>
+                        <button class="tab">提案中</button>
+                        <button class="tab">交渉中</button>
+                        <button class="tab">成約</button>
+                    </div>
+
+                    <div class="data-table">
+                        <div class="table-header">
+                            <h2 class="table-title">商談一覧</h2>
+                            <div class="table-actions">
+                                <button class="btn btn-secondary">フィルター</button>
+                                <button class="btn btn-secondary">エクスポート</button>
+                            </div>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>商談名</th>
+                                    <th>取引先</th>
+                                    <th>金額</th>
+                                    <th>ステージ</th>
+                                    <th>確度</th>
+                                    <th>クローズ予定日</th>
+                                    <th>担当者</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>新規システム導入</td>
+                                    <td>株式会社ABC</td>
+                                    <td>¥2,500,000</td>
+                                    <td><span class="status-badge status-qualified">ヒアリング</span></td>
+                                    <td>70%</td>
+                                    <td>2024/07/15</td>
+                                    <td>山田太郎</td>
+                                </tr>
+                                <tr>
+                                    <td>保守契約更新</td>
+                                    <td>XYZ商事</td>
+                                    <td>¥800,000</td>
+                                    <td><span class="status-badge status-proposal">提案</span></td>
+                                    <td>50%</td>
+                                    <td>2024/06/30</td>
+                                    <td>鈴木花子</td>
+                                </tr>
+                                <tr>
+                                    <td>追加ライセンス購入</td>
+                                    <td>田中工業</td>
+                                    <td>¥1,200,000</td>
+                                    <td><span class="status-badge status-negotiation">交渉</span></td>
+                                    <td>80%</td>
+                                    <td>2024/06/20</td>
+                                    <td>佐藤一郎</td>
+                                </tr>
+                                <tr>
+                                    <td>クラウド移行プロジェクト</td>
+                                    <td>山田商店</td>
+                                    <td>¥5,000,000</td>
+                                    <td><span class="status-badge status-new">新規</span></td>
+                                    <td>30%</td>
+                                    <td>2024/08/31</td>
+                                    <td>高橋次郎</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- モーダル -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">新規商談追加</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="opportunityForm">
+                    <div class="form-group">
+                        <label class="form-label">商談名</label>
+                        <input type="text" class="form-input" placeholder="商談名を入力">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">取引先</label>
+                        <select class="form-select">
+                            <option>選択してください</option>
+                            <option>株式会社ABC</option>
+                            <option>XYZ商事</option>
+                            <option>田中工業</option>
+                            <option>山田商店</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">金額</label>
+                        <input type="number" class="form-input" placeholder="¥0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ステージ</label>
+                        <select class="form-select">
+                            <option>新規</option>
+                            <option>ヒアリング</option>
+                            <option>提案</option>
+                            <option>交渉</option>
+                            <option>成約</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">確度 (%)</label>
+                        <input type="number" class="form-input" min="0" max="100" placeholder="0-100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">クローズ予定日</label>
+                        <input type="date" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">メモ</label>
+                        <textarea class="form-textarea" placeholder="メモを入力"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modalCancel">キャンセル</button>
+                <button class="btn btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // データストア（メモリ内で管理）
+        const dataStore = {
+            leads: [
+                { id: 1, name: '株式会社テスト', email: 'test@example.com', status: '新規', source: 'Web', createdAt: '2024-06-01' },
+                { id: 2, name: 'サンプル商事', email: 'sample@example.com', status: 'フォロー中', source: 'イベント', createdAt: '2024-06-02' }
+            ],
+            opportunities: [
+                { id: 1, name: '新規システム導入', account: '株式会社ABC', amount: 2500000, stage: 'ヒアリング', probability: 70, closeDate: '2024-07-15', owner: '山田太郎' },
+                { id: 2, name: '保守契約更新', account: 'XYZ商事', amount: 800000, stage: '提案', probability: 50, closeDate: '2024-06-30', owner: '鈴木花子' },
+                { id: 3, name: '追加ライセンス購入', account: '田中工業', amount: 1200000, stage: '交渉', probability: 80, closeDate: '2024-06-20', owner: '佐藤一郎' },
+                { id: 4, name: 'クラウド移行プロジェクト', account: '山田商店', amount: 5000000, stage: '新規', probability: 30, closeDate: '2024-08-31', owner: '高橋次郎' }
+            ],
+            accounts: [
+                { id: 1, name: '株式会社ABC', industry: 'IT', size: '100-500', revenue: '10億円', website: 'www.abc.co.jp' },
+                { id: 2, name: 'XYZ商事', industry: '小売', size: '50-100', revenue: '5億円', website: 'www.xyz.co.jp' }
+            ],
+            contacts: [
+                { id: 1, name: '田中太郎', account: '株式会社ABC', title: '営業部長', email: 'tanaka@abc.co.jp', phone: '03-1234-5678' },
+                { id: 2, name: '山田花子', account: 'XYZ商事', title: 'IT部門責任者', email: 'yamada@xyz.co.jp', phone: '03-9876-5432' }
+            ],
+            activities: [
+                { id: 1, type: '電話', subject: 'フォローアップコール', account: '株式会社ABC', date: '2024-06-15', status: '完了' },
+                { id: 2, type: 'メール', subject: '見積書送付', account: 'XYZ商事', date: '2024-06-14', status: '完了' },
+                { id: 3, type: '訪問', subject: 'デモンストレーション', account: '田中工業', date: '2024-06-20', status: '予定' }
+            ]
+        };
+
+        // ナビゲーション処理
+        const navLinks = document.querySelectorAll('.nav-link');
+        const pageTitle = document.getElementById('pageTitle');
+        const content = document.getElementById('content');
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                // アクティブクラスの切り替え
+                navLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                
+                // ページタイトルの更新
+                const pageName = link.querySelector('span:last-child').textContent;
+                pageTitle.textContent = pageName;
+                
+                // コンテンツの切り替え
+                const page = link.dataset.page;
+                updateContent(page);
+            });
+        });
+
+        // コンテンツ更新関数
+        function updateContent(page) {
+            // 全コンテンツを非表示
+            document.getElementById('dashboardContent').style.display = 'none';
+            document.getElementById('opportunitiesContent').style.display = 'none';
+            
+            // 選択されたページのコンテンツを表示
+            switch(page) {
+                case 'dashboard':
+                    document.getElementById('dashboardContent').style.display = 'block';
+                    break;
+                case 'opportunities':
+                    document.getElementById('opportunitiesContent').style.display = 'block';
+                    renderOpportunities();
+                    break;
+                case 'leads':
+                    renderLeads();
+                    break;
+                case 'accounts':
+                    renderAccounts();
+                    break;
+                case 'contacts':
+                    renderContacts();
+                    break;
+                case 'activities':
+                    renderActivities();
+                    break;
+                case 'reports':
+                    renderReports();
+                    break;
+                case 'settings':
+                    renderSettings();
+                    break;
+            }
+        }
+
+        // リード管理画面
+        function renderLeads() {
+            content.innerHTML = `
+                <div class="tabs">
+                    <button class="tab active">すべて</button>
+                    <button class="tab">新規</button>
+                    <button class="tab">フォロー中</button>
+                    <button class="tab">見込みあり</button>
+                </div>
+                <div class="data-table">
+                    <div class="table-header">
+                        <h2 class="table-title">リード一覧</h2>
+                        <div class="table-actions">
+                            <button class="btn btn-secondary">インポート</button>
+                            <button class="btn btn-primary" onclick="showLeadModal()">新規リード</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>会社名</th>
+                                <th>メールアドレス</th>
+                                <th>ステータス</th>
+                                <th>ソース</th>
+                                <th>作成日</th>
+                                <th>アクション</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dataStore.leads.map(lead => `
+                                <tr>
+                                    <td>${lead.name}</td>
+                                    <td>${lead.email}</td>
+                                    <td><span class="status-badge status-new">${lead.status}</span></td>
+                                    <td>${lead.source}</td>
+                                    <td>${lead.createdAt}</td>
+                                    <td>
+                                        <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">詳細</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // 取引先画面
+        function renderAccounts() {
+            content.innerHTML = `
+                <div class="data-table">
+                    <div class="table-header">
+                        <h2 class="table-title">取引先一覧</h2>
+                        <div class="table-actions">
+                            <button class="btn btn-primary">新規取引先</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>会社名</th>
+                                <th>業界</th>
+                                <th>規模</th>
+                                <th>年間売上</th>
+                                <th>ウェブサイト</th>
+                                <th>アクション</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dataStore.accounts.map(account => `
+                                <tr>
+                                    <td>${account.name}</td>
+                                    <td>${account.industry}</td>
+                                    <td>${account.size}名</td>
+                                    <td>${account.revenue}</td>
+                                    <td><a href="https://${account.website}" target="_blank">${account.website}</a></td>
+                                    <td>
+                                        <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">詳細</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // 連絡先画面
+        function renderContacts() {
+            content.innerHTML = `
+                <div class="data-table">
+                    <div class="table-header">
+                        <h2 class="table-title">連絡先一覧</h2>
+                        <div class="table-actions">
+                            <button class="btn btn-primary">新規連絡先</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>氏名</th>
+                                <th>会社</th>
+                                <th>役職</th>
+                                <th>メール</th>
+                                <th>電話番号</th>
+                                <th>アクション</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dataStore.contacts.map(contact => `
+                                <tr>
+                                    <td>${contact.name}</td>
+                                    <td>${contact.account}</td>
+                                    <td>${contact.title}</td>
+                                    <td>${contact.email}</td>
+                                    <td>${contact.phone}</td>
+                                    <td>
+                                        <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">詳細</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // 活動画面
+        function renderActivities() {
+            content.innerHTML = `
+                <div class="tabs">
+                    <button class="tab active">すべて</button>
+                    <button class="tab">今日</button>
+                    <button class="tab">今週</button>
+                    <button class="tab">今月</button>
+                </div>
+                <div class="data-table">
+                    <div class="table-header">
+                        <h2 class="table-title">活動一覧</h2>
+                        <div class="table-actions">
+                            <button class="btn btn-primary">新規活動</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>タイプ</th>
+                                <th>件名</th>
+                                <th>取引先</th>
+                                <th>日付</th>
+                                <th>ステータス</th>
+                                <th>アクション</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dataStore.activities.map(activity => `
+                                <tr>
+                                    <td>${activity.type}</td>
+                                    <td>${activity.subject}</td>
+                                    <td>${activity.account}</td>
+                                    <td>${activity.date}</td>
+                                    <td><span class="status-badge ${activity.status === '完了' ? 'status-qualified' : 'status-proposal'}">${activity.status}</span></td>
+                                    <td>
+                                        <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">詳細</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // レポート画面
+        function renderReports() {
+            content.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">四半期売上</div>
+                        <div class="stat-value">¥24.6M</div>
+                        <div class="stat-change positive">
+                            <span>↑</span>
+                            <span>18% 前四半期比</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">平均商談期間</div>
+                        <div class="stat-value">45日</div>
+                        <div class="stat-change positive">
+                            <span>↓</span>
+                            <span>5日短縮</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">リードコンバージョン率</div>
+                        <div class="stat-value">15.2%</div>
+                        <div class="stat-change positive">
+                            <span>↑</span>
+                            <span>3% 改善</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">顧客満足度</div>
+                        <div class="stat-value">4.5/5.0</div>
+                        <div class="stat-change positive">
+                            <span>↑</span>
+                            <span>0.2ポイント向上</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h2 class="chart-title">営業パイプライン分析</h2>
+                        <p class="chart-subtitle">ステージ別商談金額</p>
+                    </div>
+                    <div class="chart">
+                        <div class="chart-bar" style="height: 30%; background: linear-gradient(180deg, #5E3AEE, #764ba2);">
+                            <span class="chart-bar-value">¥5M</span>
+                            <span class="chart-bar-label">新規</span>
+                        </div>
+                        <div class="chart-bar" style="height: 50%; background: linear-gradient(180deg, #667eea, #5E3AEE);">
+                            <span class="chart-bar-value">¥8M</span>
+                            <span class="chart-bar-label">ヒアリング</span>
+                        </div>
+                        <div class="chart-bar" style="height: 70%; background: linear-gradient(180deg, #F59E0B, #FF6B35);">
+                            <span class="chart-bar-value">¥12M</span>
+                            <span class="chart-bar-label">提案</span>
+                        </div>
+                        <div class="chart-bar" style="height: 40%; background: linear-gradient(180deg, #FF6B35, #EF4444);">
+                            <span class="chart-bar-value">¥6M</span>
+                            <span class="chart-bar-label">交渉</span>
+                        </div>
+                        <div class="chart-bar" style="height: 85%; background: linear-gradient(180deg, #10B981, #059669);">
+                            <span class="chart-bar-value">¥15M</span>
+                            <span class="chart-bar-label">成約見込</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 設定画面
+        function renderSettings() {
+            content.innerHTML = `
+                <div style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.12);">
+                    <h2 style="margin-bottom: 2rem;">システム設定</h2>
+                    
+                    <div class="form-group">
+                        <label class="form-label">会社名</label>
+                        <input type="text" class="form-input" value="株式会社サンプル">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">タイムゾーン</label>
+                        <select class="form-select">
+                            <option>Asia/Tokyo (JST)</option>
+                            <option>America/New_York (EST)</option>
+                            <option>Europe/London (GMT)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">言語</label>
+                        <select class="form-select">
+                            <option>日本語</option>
+                            <option>English</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">通知設定</label>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" checked> メール通知を受け取る
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" checked> ブラウザ通知を有効にする
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox"> 週次レポートを受信する
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 2rem;">
+                        <button class="btn btn-primary">設定を保存</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 商談データのレンダリング
+        function renderOpportunities() {
+            // データがある場合は動的に更新
+            const tbody = document.querySelector('#opportunitiesContent tbody');
+            if (tbody && dataStore.opportunities) {
+                tbody.innerHTML = dataStore.opportunities.map(opp => `
+                    <tr>
+                        <td>${opp.name}</td>
+                        <td>${opp.account}</td>
+                        <td>¥${opp.amount.toLocaleString()}</td>
+                        <td><span class="status-badge status-${getStageClass(opp.stage)}">${opp.stage}</span></td>
+                        <td>${opp.probability}%</td>
+                        <td>${opp.closeDate}</td>
+                        <td>${opp.owner}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        // ステージに応じたクラス名を返す
+        function getStageClass(stage) {
+            const stageMap = {
+                '新規': 'new',
+                'ヒアリング': 'qualified',
+                '提案': 'proposal',
+                '交渉': 'negotiation',
+                '成約': 'qualified'
+            };
+            return stageMap[stage] || 'new';
+        }
+
+        // モーダル処理
+        const modal = document.getElementById('modal');
+        const addNewBtn = document.getElementById('addNewBtn');
+        const modalClose = document.getElementById('modalClose');
+        const modalCancel = document.getElementById('modalCancel');
+
+        addNewBtn.addEventListener('click', () => {
+            modal.classList.add('active');
+        });
+
+        modalClose.addEventListener('click', () => {
+            modal.classList.remove('active');
+        });
+
+        modalCancel.addEventListener('click', () => {
+            modal.classList.remove('active');
+        });
+
+        // モーダル外クリックで閉じる
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+
+        // タブ切り替え処理
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('tab')) {
+                const tabs = e.target.parentElement.querySelectorAll('.tab');
+                tabs.forEach(tab => tab.classList.remove('active'));
+                e.target.classList.add('active');
+            }
+        });
+
+        // 検索機能
+        const searchInput = document.querySelector('.search-input');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                console.log('検索:', e.target.value);
+                // 検索処理を実装
+            });
+        }
+
+        // 初期表示時のアニメーション
+        window.addEventListener('load', () => {
+            const cards = document.querySelectorAll('.stat-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    card.style.transition = 'all 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        });
+
+        // データの永続化（実際のアプリケーションではAPIやデータベースを使用）
+        function saveData() {
+            // GitHubと連携する場合はGitHub APIを使用
+            console.log('データを保存しました:', dataStore);
+        }
+
+        // リアルタイム更新のシミュレーション
+        setInterval(() => {
+            // ダッシュボードの数値を微妙に変動させる
+            const statValues = document.querySelectorAll('.stat-value');
+            if (statValues.length > 0 && document.getElementById('dashboardContent').style.display !== 'none') {
+                // リアルタイム感を演出（実際はWebSocketやAPIポーリングを使用）
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
