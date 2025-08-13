@@ -1334,138 +1334,110 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+        // ===== Supabase 初期化 =====
+        const SUPABASE_URL = "https://hbxlxgrwyktxpfomvsgy.supabase.co/";        // 例: https://xxxxx.supabase.co
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhieGx4Z3J3eWt0eHBmb212c2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwNTQ3NTUsImV4cCI6MjA3MDYzMDc1NX0.xlYHz_bBmdHunmSZ9RCsjEXTcxQpN6uJag9KOjDS2Ug";
+        const supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+
         // データストア
+        
+        // ① ここで差し替え
         const dataStore = {
-            opportunities: [
-                {
-                    id: 1,
-                    name: 'マーケティングシステム導入',
-                    account: '株式会社ABC',
-                    amount: 5000000,
-                    stage: '提案中',
-                    probability: 70,
-                    closeDate: '2024-07-31',
-                    nextAction: '提案書レビュー',
-                    owner: '山田太郎',
-                    type: '新規',
-                    competitor: 'B社',
-                    priority: 'high'
-                },
-                {
-                    id: 2,
-                    name: 'クラウド移行プロジェクト',
-                    account: 'XYZ商事',
-                    amount: 8500000,
-                    stage: '交渉中',
-                    probability: 85,
-                    closeDate: '2024-06-30',
-                    nextAction: '契約条件調整',
-                    owner: '山田太郎',
-                    type: '既存',
-                    competitor: '',
-                    priority: 'high'
-                },
-                {
-                    id: 3,
-                    name: 'セキュリティ強化提案',
-                    account: '田中工業',
-                    amount: 3200000,
-                    stage: 'リード',
-                    probability: 30,
-                    closeDate: '2024-08-31',
-                    nextAction: 'ヒアリング実施',
-                    owner: '鈴木花子',
-                    type: '新規',
-                    competitor: 'C社',
-                    priority: 'medium'
-                },
-                {
-                    id: 4,
-                    name: '年間保守契約更新',
-                    account: '山田商店',
-                    amount: 1200000,
-                    stage: '成約見込',
-                    probability: 95,
-                    closeDate: '2024-06-15',
-                    nextAction: '契約書送付',
-                    owner: '佐藤一郎',
-                    type: '更新',
-                    competitor: '',
-                    priority: 'low'
-                }
-            ],
-            accounts: [
-                {
-                    id: 1,
-                    name: '株式会社ABC',
-                    industry: 'IT',
-                    employees: '100-500',
-                    revenue: '10億円',
-                    website: 'www.abc.co.jp',
-                    status: 'アクティブ'
-                },
-                {
-                    id: 2,
-                    name: 'XYZ商事',
-                    industry: '小売',
-                    employees: '50-100',
-                    revenue: '5億円',
-                    website: 'www.xyz.co.jp',
-                    status: 'アクティブ'
-                }
-            ],
-            contacts: [
-                {
-                    id: 1,
-                    name: '田中太郎',
-                    account: '株式会社ABC',
-                    title: '営業部長',
-                    email: 'tanaka@abc.co.jp',
-                    phone: '03-1234-5678',
-                    decisionMaker: true
-                },
-                {
-                    id: 2,
-                    name: '山田花子',
-                    account: 'XYZ商事',
-                    title: 'IT部門責任者',
-                    email: 'yamada@xyz.co.jp',
-                    phone: '03-9876-5432',
-                    decisionMaker: false
-                }
-            ],
-            activities: [
-                {
-                    id: 1,
-                    type: 'call',
-                    subject: 'フォローアップコール',
-                    account: '株式会社ABC',
-                    date: '2024-06-15',
-                    status: '完了',
-                    notes: '次回提案の日程調整完了'
-                },
-                {
-                    id: 2,
-                    type: 'meeting',
-                    subject: 'キックオフミーティング',
-                    account: 'XYZ商事',
-                    date: '2024-06-20',
-                    status: '予定',
-                    notes: '要件定義の実施'
-                }
-            ]
+            opportunities: [],
+            accounts: [],
+            contacts: [],
+            activities: []
         };
 
+        // ② DBから読み込んで dataStore を埋める
+        async function loadAllData() {
+            // 取引先
+            {
+            const { data, error } = await supa
+                .from('accounts')
+                .select('*')
+                .order('id', { ascending: true });
+            if (error) console.error('accounts load error:', error);
+            dataStore.accounts = data ?? [];
+            }
+
+            // 商談
+            {
+            const { data, error } = await supa
+                .from('opportunities')
+                .select('*')
+                .order('id', { ascending: true });
+            if (error) console.error('opportunities load error:', error);
+            dataStore.opportunities = data ?? [];
+            }
+
+            // 担当者
+            {
+            const { data, error } = await supa
+                .from('contacts')
+                .select('*')
+                .order('id', { ascending: true });
+            if (error) console.error('contacts load error:', error);
+            dataStore.contacts = data ?? [];
+            }
+
+            // 活動
+            {
+            const { data, error } = await supa
+                .from('activities')
+                .select('*')
+                .order('id', { ascending: true });
+            if (error) console.error('activities load error:', error);
+            dataStore.activities = data ?? [];
+            }
+
+            // 画面を再描画（あなたの関数名に合わせて呼ぶ）
+            if (typeof renderOpportunityTable === 'function') renderOpportunityTable();
+            if (typeof updateContent === 'function') {
+            // ルーターがあれば現在ページを再描画
+            const page = (location.hash.replace('#/','') || 'dashboard');
+            updateContent(page);
+            }
+        }
+
         // ページ初期化
-        document.addEventListener('DOMContentLoaded', () => {
-            renderOpportunityTable();
+
+        document.addEventListener('DOMContentLoaded', async () => {
             initializeEventListeners();
+
+            // 1) 認証状態の確認（未ログインなら簡易サインアップ/ログインUIへ）
+            const { data: { user } } = await supa.auth.getUser();
+            if (!user) {
+                // 超簡易: デモ用途の匿名サインイン（本番はメール/パスワードUIを用意）
+                await supa.auth.signInWithPassword({
+                    email: 'demo@example.com',
+                    password: 'demopass'
+                }).catch(async () => {
+                    await supa.auth.signUp({
+                        email: 'demo@example.com',
+                        password: 'demopass'
+                    });
+                    await supa.auth.signInWithPassword({
+                        email: 'demo@example.com',
+                        password: 'demopass'
+                    });
+                });
+            }
+
+            // 2) 最初のユーザー用の org / profiles 初期化（1回だけ動く）
+            await ensureOrgAndProfile();
+
+            // 3) 初回データ取得
+            await loadAllData();
+            renderOpportunityTable();
+
             if (!location.hash) location.hash = '#/dashboard';
             handleRoute();
         });
-
-
+        
         // イベントリスナー初期化
         function initializeEventListeners() {
     
@@ -1493,6 +1465,17 @@
                     }
                     fabMenu.classList.remove('active');
                     fabButton.innerHTML = '<span class="material-icons">add</span>';
+                });
+            document.querySelector('.search-input').addEventListener('keyup', (e) => {
+                const q = e.target.value.trim();
+                if (q.length < 2) return; // 2文字以上で
+                const results = [
+                    ...dataStore.accounts.filter(a => a.name.includes(q)).map(a=>({type:'取引先', name:a.name})),
+                    ...dataStore.contacts.filter(c => c.name.includes(q)).map(c=>({type:'担当者', name:c.name})),
+                    ...dataStore.opportunities.filter(o => o.name.includes(q)).map(o=>({type:'商談', name:o.name}))
+                ];
+                // TODO: 結果をドロップダウン表示（後で実装）
+                console.log('search results', results);
                 });
             });
         }
@@ -1635,33 +1618,38 @@
         }
 
         // 商談保存
-        function saveOpportunity() {
+        async function saveOpportunity() {
+            const { data: me } = await supa.from('profiles').select('org_id').eq('id', (await supa.auth.getUser()).data.user.id).single();
+            const orgId = me.org_id;
+
             const opportunity = {
-                id: dataStore.opportunities.length + 1,
+                org_id: orgId,
                 name: document.getElementById('oppName').value,
-                account: document.getElementById('oppAccount').value,
+                account_id: null, // 選択肢から accounts を引いて紐付ける（簡易版は後述）
                 amount: parseInt(document.getElementById('oppAmount').value) || 0,
                 stage: document.getElementById('oppStage').value,
                 probability: parseInt(document.getElementById('oppProbability').value) || 0,
-                closeDate: document.getElementById('oppCloseDate').value,
+                close_date: document.getElementById('oppCloseDate').value || null,
                 type: document.getElementById('oppType').value,
-                competitor: document.getElementById('oppCompetitor').value,
-                notes: document.getElementById('oppNotes').value,
-                nextAction: '初回連絡',
+                competitor: document.getElementById('oppCompetitor').value || null,
+                next_action: '初回連絡',
                 owner: '山田太郎',
                 priority: 'medium'
             };
 
-            dataStore.opportunities.push(opportunity);
+            // 「取引先」セレクト値から account_id を決定（name一致で引く簡易版）
+            const sel = document.getElementById('oppAccount').value;
+            const acc = dataStore.accounts.find(a => a.name === sel);
+            if (acc) opportunity.account_id = acc.id;
+
+            const { error } = await supa.from('opportunities').insert(opportunity);
+            if (error) { alert('保存に失敗しました'); console.error(error); return; }
+
+            await loadAllData();
             renderOpportunityTable();
             closeModal('opportunityModal');
-            
-            // フォームリセット
             document.getElementById('opportunityForm').reset();
-            
-            // 成功通知（実装は省略）
-            console.log('商談を保存しました:', opportunity);
-        }
+            }
 
         // 各ページのレンダリング関数
         function renderOpportunitiesPage() {
