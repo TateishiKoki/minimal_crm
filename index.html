@@ -1027,8 +1027,8 @@
                 </div>
                 
                 <div class="auth-tabs">
-                    <button class="auth-tab active" onclick="switchAuthTab('login')">ログイン</button>
-                    <button class="auth-tab" onclick="switchAuthTab('register')">新規登録</button>
+                    <button class="auth-tab" onclick="location.hash='#/login'">ログイン</button>
+                    <button class="auth-tab" onclick="location.hash='#/register'">新規登録</button>
                 </div>
                 
                 <div id="authError" class="auth-error"></div>
@@ -1078,10 +1078,10 @@
     </div>
 
     <!-- 既存のapp-container（これは既にあるので変更なし） -->
-    <div class="app-container" id="appContainer">
+    
         <!-- 既存のコンテンツ -->
-    </div>
-    <div class="app-container">
+    
+    <div class="app-container" id="appContainer">
         <!-- サイドバー -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -1510,198 +1510,106 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        // ===== 認証関連の関数 =====
-
-        // 認証状態をチェック
-        async function checkAuth() {
-            const { data: { user } } = await supa.auth.getUser();
-            
-            if (user) {
-                // ログイン済み
-                document.getElementById('authContainer').style.display = 'none';
-                document.getElementById('appContainer').style.display = 'flex';
-                await initializeApp();
-            } else {
-                // 未ログイン
-                document.getElementById('authContainer').style.display = 'block';
-                document.getElementById('appContainer').style.display = 'none';
-            }
-        }
-
-        // タブ切り替え
-        function switchAuthTab(tab) {
-            const tabs = document.querySelectorAll('.auth-tab');
-            const forms = document.querySelectorAll('.auth-form');
-            
-            tabs.forEach(t => t.classList.remove('active'));
-            forms.forEach(f => f.classList.remove('active'));
-            
-            if (tab === 'login') {
-                tabs[0].classList.add('active');
-                document.getElementById('loginForm').classList.add('active');
-            } else {
-                tabs[1].classList.add('active');
-                document.getElementById('registerForm').classList.add('active');
-            }
-            
-            // エラーメッセージをクリア
-            document.getElementById('authError').style.display = 'none';
-            document.getElementById('authSuccess').style.display = 'none';
-        }
-
-        // ログイン処理
-        async function handleLogin(event) {
-            event.preventDefault();
-            
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-            
-            const { error } = await supa.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
-            
-            if (error) {
-                showAuthError('ログインに失敗しました: ' + error.message);
-            } else {
-                showAuthSuccess('ログインしました！');
-                setTimeout(() => {
-                    checkAuth();
-                }, 1000);
-            }
-        }
-
-        // 新規登録処理
-        async function handleRegister(event) {
-            event.preventDefault();
-            
-            const company = document.getElementById('registerCompany').value;
-            const name = document.getElementById('registerName').value;
-            const email = document.getElementById('registerEmail').value;
-            const password = document.getElementById('registerPassword').value;
-            
-            // 1. ユーザー作成
-            const { data, error } = await supa.auth.signUp({
-                email: email,
-                password: password
-            });
-            
-            if (error) {
-                showAuthError('登録に失敗しました: ' + error.message);
-                return;
-            }
-            
-            // 2. 組織とプロファイル作成
-            if (data.user) {
-                // 組織作成
-                const { data: org, error: orgError } = await supa
-                    .from('organizations')
-                    .insert({ name: company })
-                    .select()
-                    .single();
-                
-                if (orgError) {
-                    showAuthError('組織の作成に失敗しました');
-                    return;
-                }
-                
-                // プロファイル作成
-                const { error: profileError } = await supa
-                    .from('profiles')
-                    .insert({
-                        id: data.user.id,
-                        org_id: org.id,
-                        email: email,
-                        name: name,
-                        role: 'admin'
-                    });
-                
-                if (profileError) {
-                    showAuthError('プロファイルの作成に失敗しました');
-                    return;
-                }
-                
-                showAuthSuccess('登録が完了しました！自動的にログインします...');
-                setTimeout(() => {
-                    checkAuth();
-                }, 2000);
-            }
-        }
-
-        // エラー表示
-        function showAuthError(message) {
-            const errorDiv = document.getElementById('authError');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        // 成功表示
-        function showAuthSuccess(message) {
-            const successDiv = document.getElementById('authSuccess');
-            successDiv.textContent = message;
-            successDiv.style.display = 'block';
-        }
-
-        // ログアウト機能
-        async function logout() {
-            await supa.auth.signOut();
-            checkAuth();
-        }
-
-        // アプリ初期化
-        async function initializeApp() {
-            await ensureOrgAndProfile();
-            await loadAllData();
-            renderOpportunityTable();
-            if (!location.hash) location.hash = '#/dashboard';
-            handleRoute();
-        }
-        // ===== 組織とプロファイルの初期化 =====
-        async function ensureOrgAndProfile() {
-            const { data: { user } } = await supa.auth.getUser();
-            if (!user) return;
-
-            // プロファイルが存在するか確認
-            const { data: profile } = await supa
-                .from('profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single();
-
-            if (!profile) {
-                // 組織を作成
-                const { data: org, error: orgError } = await supa
-                    .from('organizations')
-                    .insert({ name: 'デモ組織' })
-                    .select()
-                    .single();
-                
-                if (orgError) {
-                    console.error('組織作成エラー:', orgError);
-                    return;
-                }
-
-                // プロファイルを作成
-                const { error: profileError } = await supa
-                    .from('profiles')
-                    .insert({
-                        id: user.id,
-                        org_id: org.id,
-                        email: user.email,
-                        name: '山田太郎'
-                    });
-                
-                if (profileError) {
-                    console.error('プロファイル作成エラー:', profileError);
-                }
-            }
-        }
+        
 
         // ===== Supabase 初期化 =====
         const SUPABASE_URL = "https://hbxlxgrwyktxpfomvsgy.supabase.co/";        // 例: https://xxxxx.supabase.co
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhieGx4Z3J3eWt0eHBmb212c2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwNTQ3NTUsImV4cCI6MjA3MDYzMDc1NX0.xlYHz_bBmdHunmSZ9RCsjEXTcxQpN6uJag9KOjDS2Ug";
         const supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    
+        // ===== ルーター（#/login, #/register, #/dashboard …） =====
+        const ROUTES = {
+            login:        { auth: 'guest',  render: () => showAuth('login') },
+            register:     { auth: 'guest',  render: () => showAuth('register') },
+            dashboard:    { auth: 'member', render: () => showApp('dashboard') },
+            opportunities:{ auth: 'member', render: () => showApp('opportunities') },
+            accounts:     { auth: 'member', render: () => showApp('accounts') },
+            contacts:     { auth: 'member', render: () => showApp('contacts') },
+            activities:   { auth: 'member', render: () => showApp('activities') },
+            proposals:    { auth: 'member', render: () => showApp('proposals') },
+            quotes:       { auth: 'member', render: () => showApp('quotes') },
+            reports:      { auth: 'member', render: () => showApp('reports') },
+            forecast:     { auth: 'member', render: () => showApp('forecast') },
+        };
+
+        function currentPath() {
+            const p = location.hash.replace('#/','').trim();
+            return p || 'dashboard';
+        }
+
+        function showAuth(activeTab) {
+            document.getElementById('authContainer').style.display = 'block';
+            document.getElementById('appContainer').style.display  = 'none';
+            switchAuthTab(activeTab || 'login'); // 既存関数を活用
+            // 左メニューのactive解除
+            document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
+            // タイトル（任意）
+            const pageTitle = document.getElementById('pageTitle');
+            if (pageTitle) pageTitle.innerHTML = `<span class="material-icons-outlined">lock</span>認証`;
+        }
+
+        function showApp(page) {
+            document.getElementById('authContainer').style.display = 'none';
+            document.getElementById('appContainer').style.display  = 'flex';
+            // 既存のナビ＆描画関数を流用
+            navigateToPage(page); // タイトル更新＋updateContent呼び出し
+        }
+
+        // 認証ガード付きにする
+        async function handleRoute() {
+            const path = currentPath();
+            const route = ROUTES[path] || ROUTES['dashboard'];
+
+            const { data: { user } } = await supa.auth.getUser();
+
+            if (route.auth === 'member' && !user) {
+                if (location.hash !== '#/login') location.hash = '#/login';
+                return;
+            }
+            if (route.auth === 'guest' && user) {
+                if (location.hash !== '#/dashboard') location.hash = '#/dashboard';
+                return;
+            }
+            route.render();
+        }
+
+        // ルート変化
+        window.addEventListener('hashchange', handleRoute);
+
+        // 初期ロード
+        document.addEventListener('DOMContentLoaded', async () => {
+            initializeEventListeners(); // 既存のやつを使う
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('demo') === 'true') {
+                // デモログインがあるならそのまま
+                await continueWithDemo?.();
+            }
+            await handleRoute();
+        });
+
+        // 認証状態チェックをルーター前提に
+        async function checkAuth() {
+            const { data: { user } } = await supa.auth.getUser();
+            if (user) {
+                await initializeApp(); // 既存：データロード等
+                if (!location.hash || location.hash === '#/login' || location.hash === '#/register') {
+                location.hash = '#/dashboard';
+                } else {
+                handleRoute();
+                }
+            } else {
+                if (location.hash !== '#/login' && location.hash !== '#/register') {
+                location.hash = '#/login';
+                } else {
+                handleRoute();
+                }
+            }
+        }
+
+        // ログアウト後の遷移先
+        async function logout() {
+            await supa.auth.signOut();
+            location.hash = '#/login';
+        }
 
         // データストア
         
@@ -2562,34 +2470,35 @@ const ROUTES = ["dashboard","opportunities","accounts","contacts","activities","
 
 window.addEventListener("hashchange", handleRoute);
 
-function handleRoute() {
-  const page = (location.hash.replace("#/","") || "dashboard");
-  const target = ROUTES.includes(page) ? page : "dashboard";
+//<!--
+//function handleRoute() {
+//  const page = (location.hash.replace("#/","") || "dashboard");
+//  const target = ROUTES.includes(page) ? page : "dashboard";
 
   // 左メニュー active 切り替え
-  document.querySelectorAll(".nav-link").forEach(a => {
-    a.classList.toggle("active", a.dataset.page === target);
-  });
+//  document.querySelectorAll(".nav-link").forEach(a => {
+//    a.classList.toggle("active", a.dataset.page === target);
+//  });
 
   // タイトル更新
-  const titles = {
-    dashboard:{icon:"dashboard", text:"ダッシュボード"},
-    opportunities:{icon:"work", text:"商談管理"},
-    accounts:{icon:"business", text:"取引先"},
-    contacts:{icon:"contacts", text:"担当者"},
-    activities:{icon:"event", text:"活動履歴"},
-    proposals:{icon:"description", text:"提案書管理"},
-    quotes:{icon:"request_quote", text:"見積管理"},
-    reports:{icon:"analytics", text:"レポート"},
-    forecast:{icon:"show_chart", text:"売上予測"}
-  };
-  const t = titles[target];
-  document.getElementById("pageTitle").innerHTML =
-    `<span class="material-icons-outlined">${t.icon}</span>${t.text}`;
+//  const titles = {
+//    dashboard:{icon:"dashboard", text:"ダッシュボード"},
+//    opportunities:{icon:"work", text:"商談管理"},
+//    accounts:{icon:"business", text:"取引先"},
+//    contacts:{icon:"contacts", text:"担当者"},
+//    activities:{icon:"event", text:"活動履歴"},
+//    proposals:{icon:"description", text:"提案書管理"},
+//    quotes:{icon:"request_quote", text:"見積管理"},
+//    reports:{icon:"analytics", text:"レポート"},
+//    forecast:{icon:"show_chart", text:"売上予測"}
+//  };
+//  const t = titles[target];
+//  document.getElementById("pageTitle").innerHTML =
+//    `<span class="material-icons-outlined">${t.icon}</span>${t.text}`;
 
   // 画面本体の切替
-  updateContent(target);
-}
+//  updateContent(target);
+//}
 
 // 既存の updateContent を上書き（このままでOK）
 function updateContent(page) {
