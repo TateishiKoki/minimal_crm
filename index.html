@@ -1695,33 +1695,32 @@
 
         // 初期ロード
         document.addEventListener('DOMContentLoaded', async () => {
-            initializeEventListeners(); // 既存のやつを使う
+            // 1) クリック系・ナビ系などの初期イベント
+            initializeEventListeners();
+
+            // 2) 取引先モーダルは1回だけ挿入
             if (!document.getElementById('accountModal')) {
                 document.body.insertAdjacentHTML('beforeend', createAccountModal());
             }
-            document.body.insertAdjacentHTML('beforeend', createAccountModal());
+
+            // 3) カメラUIの配線（モーダル内ボタン）
             document.getElementById('takePhotoBtn')?.addEventListener('click', takePhoto);
             document.getElementById('cancelCameraBtn')?.addEventListener('click', closeCamera);
 
+            // 4) 名刺アップロード<input>のchange配線
             wireBusinessCardInputOnce();
 
+            // 5) デモモードならデモログイン→初期化して終了
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('demo') === 'true') {
-                // デモログインがあるならそのまま
-                await continueWithDemo?.();
-            } else {
-                // 初回アクセス時の処理
-                const { data: { user } } = await supa.auth.getUser();
-                if (user) {
-                    await initializeApp();
-                    if (!location.hash || location.hash === '#/login' || location.hash === '#/register') {
-                        location.hash = '#/dashboard';
-                    }
-                } else {
-                    location.hash = '#/login';
-                }
+                await continueWithDemo();
+                return;
             }
+
+            // 6) 初期表示は checkAuth に寄せる（ルーティング＆描画は中で実行）
+            await checkAuth();
         });
+
 
         // 認証状態チェックをルーター前提に
         async function checkAuth() {
@@ -1747,7 +1746,8 @@
             await supa.auth.signOut();
             location.hash = '#/login';
         }
-
+        window.logout = logout;  
+        
         // データストア
         
         // ① ここで差し替え
@@ -2836,59 +2836,45 @@
             const content = document.getElementById('content');
             content.innerHTML = `
                 <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">
-                        <span class="material-icons-outlined">contacts</span> 担当者一覧
-                        </h2>
-                        <div style="display:flex; gap:.5rem;">
-                        <button class="btn btn-secondary" id="openCameraBtn">
-                            <span class="material-icons">photo_camera</span> カメラで名刺
-                        </button>
-                        <button class="btn btn-secondary" id="uploadCardBtn">
-                            <span class="material-icons">upload</span> 画像から取り込み
-                        </button>
-                        <button class="btn btn-primary" onclick="openModal('opportunityModal')">
-                            <span class="material-icons">person_add</span> 新規担当者
-                        </button>
+                <div class="card-header">
+                    <h2 class="card-title">
+                    <span class="material-icons-outlined">contacts</span> 担当者一覧
+                    </h2>
+                    <div style="display:flex; gap:.5rem;">
+                    <button class="btn btn-secondary" id="openCameraBtn">
+                        <span class="material-icons">photo_camera</span> カメラで名刺
+                    </button>
+                    <button class="btn btn-secondary" id="uploadCardBtn">
+                        <span class="material-icons">upload</span> 画像から取り込み
+                    </button>
+                    <button class="btn btn-primary" onclick="openModal('opportunityModal')">
+                        <span class="material-icons">person_add</span> 新規担当者
+                    </button>
                     </div>
                 </div>
                 <div class="card-body">
                     <div class="table-container">
-                    <table>
-                        <thead>
-                        <tr>
-                            <th>氏名</th><th>取引先</th><th>役職</th><th>メール</th><th>電話</th><th>決裁者</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        ${dataStore.contacts.map(c => `
-                            <tr>
-                            <td>${c.name}</td>
-                            <td>${c.account}</td>
-                            <td>${c.title}</td>
-                            <td><a href="mailto:${c.email}">${c.email}</a></td>
-                            <td>${c.phone}</td>
-                            <td>${c.decisionMaker ? '<span class="badge badge-primary">はい</span>' : '—'}</td>
-                            </tr>
-                        `).join('')}
-                        </tbody>
-                    </table>
+                    <table>...（略）...</table>
                     </div>
                 </div>
                 </div>
             `;
 
-            // ★ ページ描画後にボタン→ファイル入力を開く
-            document.getElementById('captureCardBtn')?.addEventListener('click', (e)=>{
-                if (cameraSupported() && isMobile()){
-                    e.preventDefault();
-                    openCamera();
+            // ← IDをUIに合わせて配線
+            document.getElementById('openCameraBtn')?.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (cameraSupported() && isMobile()) {
+                openCamera();
                 } else {
-                    document.getElementById('cardInput')?.click();
+                document.getElementById('cardInput')?.click();
                 }
             });
 
+            document.getElementById('uploadCardBtn')?.addEventListener('click', () => {
+                document.getElementById('cardInput')?.click();
+            });
         }
+
 
 
         function renderActivitiesPage() {
