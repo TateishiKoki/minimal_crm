@@ -909,7 +909,11 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--gray);
         }
+
+    
     </style>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
         <!-- ログイン画面（<body>タグの直後に追加） -->
@@ -1027,8 +1031,8 @@
                 </div>
                 
                 <div class="auth-tabs">
-                    <button class="auth-tab" onclick="location.hash='#/login'">ログイン</button>
-                    <button class="auth-tab" onclick="location.hash='#/register'">新規登録</button>
+                    <button class="auth-tab active" onclick="switchAuthTab('login')">ログイン</button>
+                    <button class="auth-tab" onclick="switchAuthTab('register')">新規登録</button>
                 </div>
                 
                 <div id="authError" class="auth-error"></div>
@@ -1049,7 +1053,16 @@
                         ログイン
                     </button>
                 </form>
-                
+                <!-- デモボタンを追加 -->
+                <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--light-gray); text-align: center;">
+                    <div style="color: var(--gray); font-size: 0.875rem; margin-bottom: 1rem;">または</div>
+                    <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="continueWithDemo()">
+                        <span class="material-icons">visibility</span>
+                        デモ版を試す
+                    </button>
+                </div>
+
+
                 <!-- 新規登録フォーム -->
                 <form id="registerForm" class="auth-form" onsubmit="handleRegister(event)">
                     <div class="form-group">
@@ -1181,9 +1194,6 @@
                 <button class="btn-icon" id="menuToggle">
                     <span class="material-icons">menu</span>
                 </button>
-                <button class="btn-icon" onclick="logout()" title="ログアウト">
-                    <span class="material-icons-outlined">logout</span>
-                </button>
                 <h1 class="header-title" id="pageTitle">
                     <span class="material-icons-outlined">dashboard</span>
                     ダッシュボード
@@ -1198,6 +1208,10 @@
                     </button>
                     <button class="btn-icon">
                         <span class="material-icons-outlined">help_outline</span>
+                    </button>
+                    <!-- ログアウトボタンを右側に移動 -->
+                    <button class="btn-icon" onclick="logout()" title="ログアウト">
+                        <span class="material-icons-outlined">logout</span>
                     </button>
                 </div>
             </header>
@@ -1583,8 +1597,18 @@
             if (urlParams.get('demo') === 'true') {
                 // デモログインがあるならそのまま
                 await continueWithDemo?.();
+            } else {
+                // 初回アクセス時の処理
+                const { data: { user } } = await supa.auth.getUser();
+                if (user) {
+                    await initializeApp();
+                    if (!location.hash || location.hash === '#/login' || location.hash === '#/register') {
+                        location.hash = '#/dashboard';
+                    }
+                } else {
+                    location.hash = '#/login';
+                }
             }
-            await handleRoute();
         });
 
         // 認証状態チェックをルーター前提に
@@ -1954,6 +1978,21 @@
                 console.log('search results', results);
                 });
             }
+            // ← 追加：サイドバーの遷移を強制的にレンダリング
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                // aタグのデフォルト遷移は使うが、同一ハッシュなら描画だけ走らせる
+                const page = link.dataset.page;
+                const targetHash = `#/${page}`;
+                if (location.hash === targetHash) {
+                    e.preventDefault();
+                    navigateToPage(page);   // 同一ページ連打でも画面を更新
+                } else {
+                    // ハッシュ変更 → hashchange → handleRoute → showApp → navigateToPage
+                    // （通常はこちらでOK）
+                }
+                }, { passive: true });
+            });
         }
 
 
@@ -1993,19 +2032,17 @@
         }
 
         // コンテンツ更新
+        // コンテンツ更新
         function updateContent(page) {
             const content = document.getElementById('content');
             
-            // 全コンテンツを非表示
-            document.getElementById('dashboardContent').style.display = 'none';
-            if (document.getElementById('opportunitiesContent')) {
-                document.getElementById('opportunitiesContent').style.display = 'none';
-            }
-
+            // すべてのコンテンツをクリア
+            content.innerHTML = '';
+            
             // 選択されたページを表示
             switch(page) {
                 case 'dashboard':
-                    document.getElementById('dashboardContent').style.display = 'block';
+                    renderDashboardPage();
                     break;
                 case 'opportunities':
                     renderOpportunitiesPage();
@@ -2153,6 +2190,150 @@
             // 成功メッセージ（オプション）
             console.log('商談を保存しました');
         }
+
+
+        const charts = {};
+
+        // ダッシュボードページのレンダリング
+        function renderDashboardPage() {
+            const content = document.getElementById('content');
+            
+            // KPI計算
+            const totalRevenue = dataStore.opportunities
+                .filter(o => o.stage === '成約見込')
+                .reduce((sum, o) => sum + o.amount, 0);
+            const dealCount = dataStore.opportunities.filter(o => o.stage === '成約見込').length;
+            const activeDeals = dataStore.opportunities.filter(o => o.stage !== '成約見込').length;
+            
+            content.innerHTML = `
+                <!-- KPI統計 -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon primary">
+                            <span class="material-icons">account_balance_wallet</span>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-label">今月の売上見込</div>
+                            <div class="stat-value">¥${totalRevenue.toLocaleString()}</div>
+                            <div class="stat-change positive">
+                                <span class="material-icons" style="font-size: 14px;">trending_up</span>
+                                <span>目標達成率 ${Math.round(totalRevenue / 10000000 * 100)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon success">
+                            <span class="material-icons">handshake</span>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-label">成約見込件数</div>
+                            <div class="stat-value">${dealCount}</div>
+                            <div class="stat-change positive">
+                                <span class="material-icons" style="font-size: 14px;">check_circle</span>
+                                <span>今月クローズ予定</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon warning">
+                            <span class="material-icons">pending_actions</span>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-label">進行中商談</div>
+                            <div class="stat-value">${activeDeals}</div>
+                            <div class="stat-change">
+                                <span class="material-icons" style="font-size: 14px;">update</span>
+                                <span>アクティブ</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon info">
+                            <span class="material-icons">business</span>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-label">取引先数</div>
+                            <div class="stat-value">${dataStore.accounts.length}</div>
+                            <div class="stat-change positive">
+                                <span class="material-icons" style="font-size: 14px;">domain</span>
+                                <span>アクティブ</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- パイプライン分析 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <span class="material-icons-outlined">insights</span>
+                            営業パイプライン
+                        </h2>
+                    </div>
+                    <div class="card-body" style="height:300px;">
+                          <canvas id="pipelineChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 重要商談リスト -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <span class="material-icons-outlined">star</span>
+                            重要商談TOP5
+                        </h2>
+                        <button class="btn btn-primary" onclick="openModal('opportunityModal')">
+                            <span class="material-icons">add</span>
+                            新規商談
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>商談名</th>
+                                        <th>取引先</th>
+                                        <th>金額</th>
+                                        <th>ステージ</th>
+                                        <th>確度</th>
+                                        <th>クローズ予定</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${dataStore.opportunities
+                                        .sort((a, b) => b.amount - a.amount)
+                                        .slice(0, 5)
+                                        .map(opp => `
+                                            <tr>
+                                                <td>${opp.name}</td>
+                                                <td>${opp.account}</td>
+                                                <td>¥${opp.amount.toLocaleString()}</td>
+                                                <td><span class="badge badge-${getStageColor(opp.stage)}">${opp.stage}</span></td>
+                                                <td>
+                                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                        <div class="progress" style="width: 60px;">
+                                                            <div class="progress-bar" style="width: ${opp.probability}%"></div>
+                                                        </div>
+                                                        <span>${opp.probability}%</span>
+                                                    </div>
+                                                </td>
+                                                <td>${opp.close_date || '未定'}</td>
+                                            </tr>
+                                        `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Chart.jsでグラフを描画
+            //setTimeout(() => drawPipelineChart(), 100);
+            // Chart.jsでグラフを描画（描画タイミングを安定させ、二重生成を防ぐ）
+            requestAnimationFrame(() => drawPipelineChart());
+        }
+
 
         // 各ページのレンダリング関数
         function renderOpportunitiesPage() {
@@ -2411,47 +2592,82 @@
 
         function renderReportsPage() {
             const content = document.getElementById('content');
-            // 軽量なダミーレポート（営業種別のパイプライン合計）
+
+            // 金額がnullでも落ちないように (o.amount || 0)
             const totals = {
-                sponsor: dataStore.opportunities.filter(o=>o.type==='新規').reduce((s,o)=>s+o.amount,0),
-                consult: dataStore.opportunities.filter(o=>o.type==='既存'||o.type==='更新').reduce((s,o)=>s+o.amount,0),
-                upsell: dataStore.opportunities.filter(o=>o.type==='アップセル').reduce((s,o)=>s+o.amount,0)
+                sponsor: dataStore.opportunities
+                .filter(o => o.type === '新規')
+                .reduce((s, o) => s + (o.amount || 0), 0),
+                consult: dataStore.opportunities
+                .filter(o => o.type === '既存' || o.type === '更新')
+                .reduce((s, o) => s + (o.amount || 0), 0),
+                upsell: dataStore.opportunities
+                .filter(o => o.type === 'アップセル')
+                .reduce((s, o) => s + (o.amount || 0), 0)
             };
+
             content.innerHTML = `
                 <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon primary"><span class="material-icons">campaign</span></div>
-                        <div class="stat-content">
-                            <div class="stat-label">スポンサー営業</div>
-                            <div class="stat-value">¥${totals.sponsor.toLocaleString()}</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon success"><span class="material-icons">psychology</span></div>
-                        <div class="stat-content">
-                            <div class="stat-label">コンサル営業</div>
-                            <div class="stat-value">¥${totals.consult.toLocaleString()}</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon warning"><span class="material-icons">trending_up</span></div>
-                        <div class="stat-content">
-                            <div class="stat-label">アップセル</div>
-                            <div class="stat-value">¥${totals.upsell.toLocaleString()}</div>
-                        </div>
+                <div class="stat-card">
+                    <div class="stat-icon primary"><span class="material-icons">campaign</span></div>
+                    <div class="stat-content">
+                    <div class="stat-label">スポンサー営業</div>
+                    <div class="stat-value">¥${totals.sponsor.toLocaleString()}</div>
                     </div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-icon success"><span class="material-icons">psychology</span></div>
+                    <div class="stat-content">
+                    <div class="stat-label">コンサル営業</div>
+                    <div class="stat-value">¥${totals.consult.toLocaleString()}</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon warning"><span class="material-icons">trending_up</span></div>
+                    <div class="stat-content">
+                    <div class="stat-label">アップセル</div>
+                    <div class="stat-value">¥${totals.upsell.toLocaleString()}</div>
+                    </div>
+                </div>
+                </div>
+
                 <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title"><span class="material-icons-outlined">analytics</span> 売上レポート（簡易）</h2>
-                        <button class="btn btn-secondary"><span class="material-icons-outlined">download</span> CSV</button>
-                    </div>
-                    <div class="card-body">
-                        <p>詳細なグラフは後でChartライブラリ導入可。まずはKPIが即見える形にしています。</p>
-                    </div>
+                <div class="card-header">
+                    <h2 class="card-title">
+                    <span class="material-icons-outlined">analytics</span> 売上レポート（簡易）
+                    </h2>
+                    <button class="btn btn-secondary">
+                    <span class="material-icons-outlined">download</span> CSV
+                    </button>
+                </div>
+                <!-- ← 高さを確保してcanvasを置く -->
+                <div class="card-body" style="height:300px;">
+                    <canvas id="reportChart"></canvas>
+                </div>
                 </div>
             `;
-        }
+
+            // チャート描画（多重生成を防ぐ）
+            requestAnimationFrame(() => {
+                const el = document.getElementById('reportChart');
+                if (!el) return;
+                if (charts.report) charts.report.destroy();
+
+                charts.report = new Chart(el.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['新規', '既存/更新', 'アップセル'],
+                    datasets: [{
+                    data: [totals.sponsor, totals.consult, totals.upsell]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+                });
+            });
+            }
 
         function renderForecastPage() {
             const content = document.getElementById('content');
@@ -2477,6 +2693,167 @@
                 </div>
             `;
         }
+        
+        // 取引先登録モーダルを追加（opportunityModalの後に）
+        function createAccountModal() {
+            return `
+            <div class="modal" id="accountModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">
+                            <span class="material-icons">business</span>
+                            新規取引先登録
+                        </h2>
+                        <button class="btn-icon" onclick="closeModal('accountModal')">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="accountForm">
+                            <div class="form-group">
+                                <label class="form-label">会社名 <span class="required">*</span></label>
+                                <input type="text" class="form-input" id="accName" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">業種</label>
+                                    <select class="form-select" id="accIndustry">
+                                        <option value="IT">IT</option>
+                                        <option value="製造業">製造業</option>
+                                        <option value="小売">小売</option>
+                                        <option value="サービス">サービス</option>
+                                        <option value="金融">金融</option>
+                                        <option value="不動産">不動産</option>
+                                        <option value="その他">その他</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">従業員規模</label>
+                                    <select class="form-select" id="accEmployees">
+                                        <option value="1-10">1-10</option>
+                                        <option value="10-50">10-50</option>
+                                        <option value="50-100">50-100</option>
+                                        <option value="100-500">100-500</option>
+                                        <option value="500-1000">500-1000</option>
+                                        <option value="1000+">1000+</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">年間売上</label>
+                                    <input type="text" class="form-input" id="accRevenue" placeholder="例: 10億円">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Webサイト</label>
+                                    <input type="text" class="form-input" id="accWebsite" placeholder="www.example.co.jp">
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeModal('accountModal')">キャンセル</button>
+                        <button class="btn btn-primary" onclick="saveAccount()">
+                            <span class="material-icons">save</span>
+                            保存
+                        </button>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
+        // 取引先保存
+        async function saveAccount() {
+            const { data: { user } } = await supa.auth.getUser();
+            if (!user) {
+                alert('ログインが必要です');
+                return;
+            }
+            
+            const { data: me } = await supa
+                .from('profiles')
+                .select('org_id')
+                .eq('id', user.id)
+                .single();
+            
+            const account = {
+                org_id: me.org_id,
+                name: document.getElementById('accName').value,
+                industry: document.getElementById('accIndustry').value,
+                employees: document.getElementById('accEmployees').value,
+                revenue: document.getElementById('accRevenue').value,
+                website: document.getElementById('accWebsite').value,
+                status: 'アクティブ'
+            };
+
+            const { error } = await supa.from('accounts').insert(account);
+            if (error) {
+                alert('保存に失敗しました: ' + error.message);
+                return;
+            }
+
+            await loadAllData();
+            closeModal('accountModal');
+            document.getElementById('accountForm').reset();
+            alert('取引先を登録しました！');
+        }
+
+        
+        function drawPipelineChart() {
+            const canvas = document.getElementById('pipelineChart');
+            if (!canvas) return;
+
+            // すでに作っているチャートがあれば破棄（多重生成防止）
+            if (charts.pipeline) {
+                charts.pipeline.destroy();
+            }
+
+            const stages = ['リード', '提案中', '交渉中', '成約見込'];
+            const data = stages.map(stage =>
+                dataStore.opportunities
+                .filter(o => o.stage === stage)
+                .reduce((sum, o) => sum + (o.amount || 0), 0)
+            );
+
+            charts.pipeline = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                labels: stages,
+                datasets: [{
+                    label: '金額',
+                    data,
+                    backgroundColor: [
+                    'rgba(41, 182, 246, 0.8)',
+                    'rgba(255, 167, 38, 0.8)',
+                    'rgba(156, 39, 176, 0.8)',
+                    'rgba(102, 187, 106, 0.8)'
+                    ],
+                    borderWidth: 0
+                }]
+                },
+                options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                    callbacks: {
+                        label: (ctx) => '¥' + Number(ctx.parsed.y || 0).toLocaleString()
+                    }
+                    }
+                },
+                scales: {
+                    y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: (v) => '¥' + Number(v).toLocaleString()
+                    }
+                    }
+                }
+                }
+            });
+            }
 
     </script>
 </body>
