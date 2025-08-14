@@ -1445,10 +1445,10 @@
                             <label class="form-label">取引先 <span class="required">*</span></label>
                             <select class="form-select" id="oppAccount" required>
                                 <option value="">選択してください</option>
-                                <option value="株式会社ABC">株式会社ABC</option>
+                                <!--option value="株式会社ABC">株式会社ABC</option>
                                 <option value="XYZ商事">XYZ商事</option>
                                 <option value="田中工業">田中工業</option>
-                                <option value="山田商店">山田商店</option>
+                                <option value="山田商店">山田商店</option>-->
                             </select>
                         </div>
                     </div>
@@ -1513,7 +1513,7 @@
         
 
         // ===== Supabase 初期化 =====
-        const SUPABASE_URL = "https://hbxlxgrwyktxpfomvsgy.supabase.co/";        // 例: https://xxxxx.supabase.co
+        const SUPABASE_URL = "https://hbxlxgrwyktxpfomvsgy.supabase.co";        // 例: https://xxxxx.supabase.co
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhieGx4Z3J3eWt0eHBmb212c2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwNTQ3NTUsImV4cCI6MjA3MDYzMDc1NX0.xlYHz_bBmdHunmSZ9RCsjEXTcxQpN6uJag9KOjDS2Ug";
         const supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         // ===== ルーター（#/login, #/register, #/dashboard …） =====
@@ -1578,6 +1578,7 @@
         // 初期ロード
         document.addEventListener('DOMContentLoaded', async () => {
             initializeEventListeners(); // 既存のやつを使う
+
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('demo') === 'true') {
                 // デモログインがあるならそのまま
@@ -1725,27 +1726,39 @@
         // デモモードかどうかのフラグ
         let isDemoMode = false;
 
-        // 認証状態をチェック
-        async function checkAuth() {
-            const { data: { user } } = await supa.auth.getUser();
-            
-            if (user) {
-                // ログイン済み
-                document.getElementById('authContainer').style.display = 'none';
-                document.getElementById('appContainer').style.display = 'flex';
-                await initializeApp();
-            } else {
-                // 未ログイン
-                document.getElementById('authContainer').style.display = 'block';
-                document.getElementById('appContainer').style.display = 'none';
-            }
+
+
+        // 組織＆プロファイルを初期化（存在しなければ作成）
+        async function ensureOrgAndProfile() {
+        const { data: { user } } = await supa.auth.getUser();
+        if (!user) return;
+
+        const { data: profile } = await supa
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+        if (!profile) {
+            const { data: org, error: orgError } = await supa
+            .from('organizations')
+            .insert({ name: 'デモ組織' })
+            .select()
+            .single();
+            if (orgError) { console.error('組織作成エラー:', orgError); return; }
+
+            const { error: profileError } = await supa
+            .from('profiles')
+            .insert({ id: user.id, org_id: org.id, email: user.email, name: '山田太郎' });
+            if (profileError) { console.error('プロファイル作成エラー:', profileError); }
         }
+        }
+
 
         // アプリ初期化
         async function initializeApp() {
             await ensureOrgAndProfile();
             await loadAllData();
-            renderOpportunityTable();
             if (!location.hash) location.hash = '#/dashboard';
             handleRoute();
         }
@@ -1890,67 +1903,59 @@
             successDiv.style.display = 'block';
         }
 
-        // ログアウト機能
-        async function logout() {
-            await supa.auth.signOut();
-            checkAuth();
-        }
 
-        // ページ初期化
-        document.addEventListener('DOMContentLoaded', async () => {
-            initializeEventListeners();
-            
-            // URLパラメータでデモモードかチェック
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('demo') === 'true') {
-                // デモモードで自動ログイン
-                await continueWithDemo();
-            } else {
-                // 通常の認証チェック
-                await checkAuth();
-            }
-        });        
+        
         // イベントリスナー初期化
         function initializeEventListeners() {
-    
             // FABメニュー
             const fabButton = document.getElementById('fabButton');
-            const fabMenu = document.getElementById('fabMenu');
-            
-            fabButton.addEventListener('click', () => {
+            const fabMenu   = document.getElementById('fabMenu');
+
+            if (fabButton && fabMenu) {
+                fabButton.addEventListener('click', () => {
                 fabMenu.classList.toggle('active');
-                fabButton.innerHTML = fabMenu.classList.contains('active') 
+                fabButton.innerHTML = fabMenu.classList.contains('active')
                     ? '<span class="material-icons">close</span>'
                     : '<span class="material-icons">add</span>';
-            });
+                });
+            }
 
             // メニュートグル
-            document.getElementById('menuToggle').addEventListener('click', () => {
-                document.getElementById('sidebar').classList.toggle('active');
-            });
+            const menuToggle = document.getElementById('menuToggle');
+            if (menuToggle) {
+                menuToggle.addEventListener('click', () => {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar) sidebar.classList.toggle('active');
+                });
+            }
 
             // FABアイテムクリック
             document.querySelectorAll('.fab-item').forEach((item, index) => {
                 item.addEventListener('click', () => {
-                    if (index === 0) {
-                        openModal('opportunityModal');
-                    }
+                if (index === 0) openModal('opportunityModal');
+                if (fabMenu && fabButton) {
                     fabMenu.classList.remove('active');
                     fabButton.innerHTML = '<span class="material-icons">add</span>';
-                });
-            document.querySelector('.search-input').addEventListener('keyup', (e) => {
-                const q = e.target.value.trim();
-                if (q.length < 2) return; // 2文字以上で
-                const results = [
-                    ...dataStore.accounts.filter(a => a.name.includes(q)).map(a=>({type:'取引先', name:a.name})),
-                    ...dataStore.contacts.filter(c => c.name.includes(q)).map(c=>({type:'担当者', name:c.name})),
-                    ...dataStore.opportunities.filter(o => o.name.includes(q)).map(o=>({type:'商談', name:o.name}))
-                ];
-                // TODO: 結果をドロップダウン表示（後で実装）
-                console.log('search results', results);
+                }
                 });
             });
+
+            // ✅ 検索リスナーは forEach の外で一度だけ
+            const search = document.querySelector('.search-input');
+            if (search) {
+                search.addEventListener('keyup', (e) => {
+                const q = e.target.value.trim();
+                if (q.length < 2) return;
+                const results = [
+                    ...dataStore.accounts.filter(a => a.name?.includes(q)).map(a=>({type:'取引先', name:a.name})),
+                    ...dataStore.contacts.filter(c => c.name?.includes(q)).map(c=>({type:'担当者', name:c.name})),
+                    ...dataStore.opportunities.filter(o => o.name?.includes(q)).map(o=>({type:'商談', name:o.name}))
+                ];
+                console.log('search results', results);
+                });
+            }
         }
+
 
         // ページナビゲーション
         function navigateToPage(page) {
@@ -2090,7 +2095,14 @@
                 updateAccountSelect();
             }
         }
-        // 商談保存
+
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('active');
+        }
+
+
+        
         // 商談保存
         async function saveOpportunity() {
             const { data: { user } } = await supa.auth.getUser();
@@ -2465,59 +2477,6 @@
                 </div>
             `;
         }
-// ===== Router（#/xxx で画面切替） =====
-const ROUTES = ["dashboard","opportunities","accounts","contacts","activities","proposals","quotes","reports","forecast"];
-
-window.addEventListener("hashchange", handleRoute);
-
-//<!--
-//function handleRoute() {
-//  const page = (location.hash.replace("#/","") || "dashboard");
-//  const target = ROUTES.includes(page) ? page : "dashboard";
-
-  // 左メニュー active 切り替え
-//  document.querySelectorAll(".nav-link").forEach(a => {
-//    a.classList.toggle("active", a.dataset.page === target);
-//  });
-
-  // タイトル更新
-//  const titles = {
-//    dashboard:{icon:"dashboard", text:"ダッシュボード"},
-//    opportunities:{icon:"work", text:"商談管理"},
-//    accounts:{icon:"business", text:"取引先"},
-//    contacts:{icon:"contacts", text:"担当者"},
-//    activities:{icon:"event", text:"活動履歴"},
-//    proposals:{icon:"description", text:"提案書管理"},
-//    quotes:{icon:"request_quote", text:"見積管理"},
-//    reports:{icon:"analytics", text:"レポート"},
-//    forecast:{icon:"show_chart", text:"売上予測"}
-//  };
-//  const t = titles[target];
-//  document.getElementById("pageTitle").innerHTML =
-//    `<span class="material-icons-outlined">${t.icon}</span>${t.text}`;
-
-  // 画面本体の切替
-//  updateContent(target);
-//}
-
-// 既存の updateContent を上書き（このままでOK）
-function updateContent(page) {
-  const dash = document.getElementById('dashboardContent');
-  if (dash) dash.style.display = 'none';
-
-  switch(page) {
-    case 'dashboard': if (dash) dash.style.display = 'block'; break;
-    case 'opportunities': renderOpportunitiesPage(); break;
-    case 'accounts':      renderAccountsPage();      break;
-    case 'contacts':      renderContactsPage();      break;
-    case 'activities':    renderActivitiesPage();    break;
-    case 'proposals':     renderProposalsPage();     break;
-    case 'quotes':        renderQuotesPage();        break;
-    case 'reports':       renderReportsPage();       break;
-    case 'forecast':      renderForecastPage();      break;
-  }
-}
-
 
     </script>
 </body>
