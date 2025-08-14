@@ -940,6 +940,28 @@
         ::-webkit-scrollbar-track{ background: var(--light-gray); }
         ::-webkit-scrollbar-thumb{ background: #B0BEC5; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover{ background: var(--gray); }
+        /* Camera UI */
+        #cameraModal{
+        position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+        background:rgba(0,0,0,.85); z-index:3000;
+        }
+        #cameraModal.active{ display:flex; }
+        #cameraModal .cam-box{
+        width:min(92vw,480px); aspect-ratio:3/4; background:#000;
+        border-radius:16px; overflow:hidden; position:relative;
+        box-shadow:0 10px 30px rgba(0,0,0,.4);
+        }
+        #cameraModal video, #cameraModal canvas{
+        width:100%; height:100%; object-fit:cover; display:block;
+        }
+        #cameraModal .cam-controls{
+        position:absolute; left:0; right:0; bottom:12px; display:flex; justify-content:center; gap:12px;
+        }
+        .cam-btn{
+        padding:.75rem 1.25rem; border:none; border-radius:999px; background:#fff; color:#111;
+        font-weight:600; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.3);
+        }
+        .cam-btn.cam-cancel{ background:#eee; }
 
     </style>
     <!-- Chart.js CDN -->
@@ -1674,6 +1696,14 @@
         // 初期ロード
         document.addEventListener('DOMContentLoaded', async () => {
             initializeEventListeners(); // 既存のやつを使う
+            if (!document.getElementById('accountModal')) {
+                document.body.insertAdjacentHTML('beforeend', createAccountModal());
+            }
+            document.body.insertAdjacentHTML('beforeend', createAccountModal());
+            document.getElementById('takePhotoBtn')?.addEventListener('click', takePhoto);
+            document.getElementById('cancelCameraBtn')?.addEventListener('click', closeCamera);
+
+            wireBusinessCardInputOnce();
 
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('demo') === 'true') {
@@ -2025,61 +2055,54 @@
         }
 
         // 新規登録処理
-        async function handleRegister(event) {
+       async function handleRegister(event) {
             event.preventDefault();
-            
-            const company = document.getElementById('registerCompany').value;
-            const name = document.getElementById('registerName').value;
-            const email = document.getElementById('registerEmail').value;
+
+            const company  = document.getElementById('registerCompany').value.trim();
+            const name     = document.getElementById('registerName').value.trim();
+            const email    = document.getElementById('registerEmail').value.trim();
             const password = document.getElementById('registerPassword').value;
-            
-            // 1. ユーザー作成
-            const { data, error } = await supa.auth.signUp({
-                email: email,
-                password: password
-            });
-            
+
+            const { data, error } = await supa.auth.signUp({ email, password });
             if (error) {
                 showAuthError('登録に失敗しました: ' + error.message);
                 return;
             }
-            
-            // 2. 組織とプロファイル作成
-            if (data.user) {
-                // 組織作成
-                const { data: org, error: orgError } = await supa
-                    .from('organizations')
-                    .insert({ name: company })
-                    .select()
-                    .single();
-                
-                if (orgError) {
-                    showAuthError('組織の作成に失敗しました');
-                    return;
-                }
-                
-                // プロファイル作成
-                const { error: profileError } = await supa
-                    .from('profiles')
-                    .insert({
-                        id: data.user.id,
-                        org_id: org.id,
-                        email: email,
-                        name: name,
-                        role: 'admin'
-                    });
-                
-                if (profileError) {
-                    showAuthError('プロファイルの作成に失敗しました');
-                    return;
-                }
-                
-                showAuthSuccess('登録が完了しました！自動的にログインします...');
-                setTimeout(() => {
-                    checkAuth();
-                }, 2000);
+
+            // （メール確認OFFの環境なら）そのままサインインを試す
+            let signedIn = false;
+            try {
+                const { error: signErr } = await supa.auth.signInWithPassword({ email, password });
+                if (!signErr) signedIn = true;
+            } catch (_) {}
+
+            // ここで未ログイン＝メール確認ONの環境。ユーザーに案内してログインタブへ戻す。
+            if (!signedIn) {
+                showAuthSuccess('確認メールを送信しました。メール内のリンクで有効化後、ログインしてください。');
+                switchAuthTab('login');
+                return;
             }
+
+            // ログインできている場合は、組織/プロファイル作成を共通処理に任せる
+            await ensureOrgAndProfile();
+
+            // 任意：会社名・氏名を上書き反映
+            const { data: { user } } = await supa.auth.getUser();
+            if (user) {
+                const { data: prof } = await supa.from('profiles').select('org_id').eq('id', user.id).single();
+                if (prof?.org_id && company) {
+                await supa.from('organizations').update({ name: company }).eq('id', prof.org_id);
+                }
+                if (name) {
+                await supa.from('profiles').update({ name }).eq('id', user.id);
+                }
+            }
+
+            showAuthSuccess('登録が完了しました！');
+            await initializeApp();
+            location.hash = '#/dashboard';
         }
+
 
         // エラー表示
         function showAuthError(message) {
@@ -2241,6 +2264,95 @@
                 }, { passive: true });
             });
         }
+
+        // 名刺画像ファイル(BlobやFile)を処理する共通関数
+        async function handleBusinessCardFile(file){
+            const { data: { user } } = await supa.auth.getUser();
+            if (!user) { alert('ログインが必要です'); return; }
+
+            // 1) 画像を Storage に保存
+            const uuid = (crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2));
+            const fileName = `${uuid}.jpg`;
+            const { error: upErr } = await supa.storage.from('cards').upload(fileName, file);
+            if (upErr) { alert('アップロードに失敗しました'); return; }
+
+            // 2) DBにレコード作成（OCR前）
+            const { data: me } = await supa.from('profiles').select('org_id').eq('id', user.id).single();
+            const { data: rec, error: insErr } = await supa.from('business_cards')
+                .insert({ org_id: me.org_id, image_path: fileName, created_by: user.id })
+                .select().single();
+            if (insErr) { alert('登録に失敗しました'); return; }
+
+            // 3) OCR 実行（Publicバケット想定）
+            let imgUrl = supa.storage.from('cards').getPublicUrl(fileName).data.publicUrl;
+            const worker = await Tesseract.createWorker();
+            const { data: { text } } = await worker.recognize(imgUrl, 'jpn+eng');
+            await worker.terminate();
+
+            // 4) ざっくり抽出（MVP）
+            const email = (text.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i) || [])[0] || null;
+            const phone = (text.match(/\+?\d[\d\- ()]{8,}\d/g) || [])[0] || null;
+            const name  = (text.split('\n').find(l => l.trim().length <= 12 && /[一-龠々]/.test(l)) || '').trim();
+
+            await supa.from('business_cards')
+                .update({ ocr_json: { raw: text, name, email, phone }, status: 'parsed' })
+                .eq('id', rec.id);
+
+            // 5) 既存チェック（メール重複）
+            if (email) {
+                const { data: dup } = await supa.from('contacts').select('id').eq('email', email).maybeSingle();
+                if (dup) { alert('既存の担当者が見つかりました'); return; }
+            }
+
+            // 6) 担当者作成（最低限）
+            const { error: cErr } = await supa.from('contacts').insert({
+                org_id: me.org_id, name, email, phone, account_id: null
+            });
+            if (cErr) { alert('担当者作成に失敗しました'); return; }
+
+            await loadAllData?.();
+            alert('名刺から担当者を登録しました');
+        }
+        let _camStream = null;
+        function cameraSupported(){ return !!(navigator.mediaDevices?.getUserMedia); }
+
+        async function openCamera(){
+            const modal = document.getElementById('cameraModal');
+            const video = document.getElementById('cameraVideo');
+            try{
+                _camStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } }, audio: false
+                });
+                video.srcObject = _camStream;
+                modal.classList.add('active');
+                document.body.classList.add('no-scroll');
+            }catch(e){ console.error(e); alert('カメラを起動できませんでした'); }
+        }
+
+        function closeCamera(){
+            const modal = document.getElementById('cameraModal');
+            const video = document.getElementById('cameraVideo');
+            modal?.classList.remove('active');
+            document.body.classList.remove('no-scroll');
+            if(_camStream){ _camStream.getTracks().forEach(t => t.stop()); _camStream = null; }
+            if(video) video.srcObject = null;
+        }
+
+        async function takePhoto(){
+            const video = document.getElementById('cameraVideo');
+            const canvas = document.getElementById('cameraCanvas');
+            const w = video.videoWidth || 1080, h = video.videoHeight || 1440;
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, w, h);
+            canvas.toBlob(async (blob)=>{
+                if(!blob){ alert('撮影に失敗しました'); return; }
+                await handleBusinessCardFile(blob);
+                closeCamera();
+            }, 'image/jpeg', 0.92);
+        }
+
+
         function wireBusinessCardInputOnce() {
             const input = document.getElementById('cardInput');
             if (!input || input.dataset.wired === '1') return; // 二重登録防止
@@ -2249,69 +2361,10 @@
             input.addEventListener('change', async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                // 同じファイルを続けて選べるように
-                e.target.value = '';
-
-                const { data: { user } } = await supa.auth.getUser();
-                if (!user) { alert('ログインが必要です'); return; }
-
-                // 1) 画像を Storage に保存
-                const uuid = (crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2));
-                const fileName = `${uuid}.jpg`;
-                const { error: upErr } = await supa.storage.from('cards').upload(fileName, file);
-                if (upErr) { alert('アップロードに失敗しました'); return; }
-
-                // 2) DBにレコード作成（OCR前）
-                const { data: me } = await supa.from('profiles').select('org_id').eq('id', user.id).single();
-                const { data: rec, error: insErr } = await supa.from('business_cards')
-                .insert({ org_id: me.org_id, image_path: fileName, created_by: user.id })
-                .select().single();
-                if (insErr) { alert('登録に失敗しました'); return; }
-
-                // 3) OCR 実行（Public バケット想定）
-                let imgUrl = supa.storage.from('cards').getPublicUrl(fileName).data.publicUrl;
-
-                // ※ cards バケットを Private にした場合はこちらを使う：
-                // const { data: signed } = await supa.storage.from('cards').createSignedUrl(fileName, 60);
-                // let imgUrl = signed?.signedUrl;
-
-                const worker = await Tesseract.createWorker();
-                const { data: { text } } = await worker.recognize(imgUrl, 'jpn+eng');
-                await worker.terminate();
-
-                // 4) ざっくり抽出（MVP）
-                const email = (text.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i) || [])[0] || null;
-                const phone = (text.match(/\+?\d[\d\- ()]{8,}\d/g) || [])[0] || null;
-                const name  = (text.split('\n').find(l => l.trim().length <= 12 && /[一-龠々]/.test(l)) || '').trim();
-
-                await supa.from('business_cards')
-                .update({ ocr_json: { raw: text, name, email, phone }, status: 'parsed' })
-                .eq('id', rec.id);
-
-                // 5) 既存チェック（メール重複）
-                if (email) {
-                const { data: dup } = await supa.from('contacts').select('id').eq('email', email).maybeSingle();
-                if (dup) { alert('既存の担当者が見つかりました'); return; }
-                }
-
-                // 6) 担当者作成（最低限）
-                const { error: cErr } = await supa.from('contacts').insert({
-                org_id: me.org_id, name, email, phone, account_id: null
-                });
-                if (cErr) { alert('担当者作成に失敗しました'); return; }
-
-                // 必要なら再読込
-                await loadAllData?.();
-                alert('名刺から担当者を登録しました');
+                e.target.value = '';           // 同じファイルを続けて選べるように
+                await handleBusinessCardFile(file); // ← 共通処理に委譲
             });
-            }
-
-            // DOM構築後に一度だけ実行（initializeEventListenersの最後でもOK）
-            document.addEventListener('DOMContentLoaded', () => {
-            wireBusinessCardInputOnce();
-            });
-
-
+        }
 
         // ページナビゲーション
         function navigateToPage(page) {
@@ -2723,66 +2776,80 @@
             `;
         }
 
-        // その他のページレンダリング関数（簡略版）
         function renderAccountsPage() {
-            const content = document.getElementById('content');
-            content.innerHTML = `
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">
-                            <span class="material-icons-outlined">business</span>
-                                                        取引先
-                        </h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>取引先名</th>
-                                        <th>業種</th>
-                                        <th>従業員規模</th>
-                                        <th>売上</th>
-                                        <th>Web</th>
-                                        <th>ステータス</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${dataStore.accounts.map(a => `
-                                        <tr>
-                                            <td>${a.name}</td>
-                                            <td>${a.industry}</td>
-                                            <td>${a.employees}</td>
-                                            <td>${a.revenue}</td>
-                                            <td><a href="https://${a.website}" target="_blank">${a.website}</a></td>
-                                            <td><span class="badge badge-success">${a.status}</span></td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderContactsPage() {
             const content = document.getElementById('content');
             content.innerHTML = `
                 <div class="card">
                 <div class="card-header">
                     <h2 class="card-title">
-                    <span class="material-icons-outlined">contacts</span>
-                    担当者一覧
+                    <span class="material-icons-outlined">business</span>
+                    取引先
                     </h2>
                     <div style="display:flex; gap:.5rem;">
-                    <!-- ★ 追加：名刺取り込み -->
-                    <button class="btn btn-secondary" id="captureCardBtn">
-                        <span class="material-icons">photo_camera</span> 名刺を取り込む
+                    <button id="openAccountModalBtn" class="btn btn-primary">
+                        <span class="material-icons">add</span> 新規取引先
                     </button>
-                    <button class="btn btn-primary" onclick="openModal('opportunityModal')">
-                        <span class="material-icons">person_add</span> 新規担当者
-                    </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>取引先名</th>
+                            <th>業種</th>
+                            <th>従業員規模</th>
+                            <th>売上</th>
+                            <th>Web</th>
+                            <th>ステータス</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        ${dataStore.accounts.map(a => {
+                            const web = a.website ? ( /^https?:\/\//.test(a.website) ? a.website : `https://${a.website}` ) : '';
+                            return `
+                            <tr>
+                                <td>${a.name}</td>
+                                <td>${a.industry || '—'}</td>
+                                <td>${a.employees || '—'}</td>
+                                <td>${a.revenue || '—'}</td>
+                                <td>${web ? `<a href="${web}" target="_blank" rel="noopener">${a.website}</a>` : '—'}</td>
+                                <td><span class="badge badge-success">${a.status || 'アクティブ'}</span></td>
+                            </tr>
+                            `;
+                        }).join('')}
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+                </div>
+            `;
+
+            // ← ここでDOMに追加されたボタンへイベントを付与
+            content.querySelector('#openAccountModalBtn')
+                ?.addEventListener('click', () => openModal('accountModal'));
+        }
+
+
+
+        function renderContactsPage() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                        <span class="material-icons-outlined">contacts</span> 担当者一覧
+                        </h2>
+                        <div style="display:flex; gap:.5rem;">
+                        <button class="btn btn-secondary" id="openCameraBtn">
+                            <span class="material-icons">photo_camera</span> カメラで名刺
+                        </button>
+                        <button class="btn btn-secondary" id="uploadCardBtn">
+                            <span class="material-icons">upload</span> 画像から取り込み
+                        </button>
+                        <button class="btn btn-primary" onclick="openModal('opportunityModal')">
+                            <span class="material-icons">person_add</span> 新規担当者
+                        </button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -2812,9 +2879,15 @@
             `;
 
             // ★ ページ描画後にボタン→ファイル入力を開く
-            document.getElementById('captureCardBtn')?.addEventListener('click', ()=>{
-                document.getElementById('cardInput')?.click();
+            document.getElementById('captureCardBtn')?.addEventListener('click', (e)=>{
+                if (cameraSupported() && isMobile()){
+                    e.preventDefault();
+                    openCamera();
+                } else {
+                    document.getElementById('cardInput')?.click();
+                }
             });
+
         }
 
 
@@ -3189,20 +3262,24 @@
         // 取引先保存
         async function saveAccount() {
             const { data: { user } } = await supa.auth.getUser();
-            if (!user) {
-                alert('ログインが必要です');
-                return;
+            if (!user) { alert('ログインが必要です'); return; }
+
+            // org_id を安全に取得（currentProfile → profiles → ensure → profiles）
+            let orgId = currentProfile?.org_id;
+            if (!orgId) {
+                const { data: me1 } = await supa.from('profiles').select('org_id').eq('id', user.id).single();
+                orgId = me1?.org_id;
             }
-            
-            const { data: me } = await supa
-                .from('profiles')
-                .select('org_id')
-                .eq('id', user.id)
-                .single();
-            
+            if (!orgId) {
+                await ensureOrgAndProfile();
+                const { data: me2 } = await supa.from('profiles').select('org_id').eq('id', user.id).single();
+                orgId = me2?.org_id;
+            }
+            if (!orgId) { alert('組織情報の取得に失敗しました'); return; }
+
             const account = {
-                org_id: me.org_id,
-                name: document.getElementById('accName').value,
+                org_id: orgId,
+                name: document.getElementById('accName').value.trim(),
                 industry: document.getElementById('accIndustry').value,
                 employees: document.getElementById('accEmployees').value,
                 revenue: document.getElementById('accRevenue').value,
@@ -3210,16 +3287,65 @@
                 status: 'アクティブ'
             };
 
+            if (!account.name) { alert('会社名は必須です'); return; }
+
             const { error } = await supa.from('accounts').insert(account);
-            if (error) {
-                alert('保存に失敗しました: ' + error.message);
-                return;
-            }
+            if (error) { alert('保存に失敗しました: ' + error.message); return; }
 
             await loadAllData();
             closeModal('accountModal');
             document.getElementById('accountForm').reset();
             alert('取引先を登録しました！');
+        }
+
+
+        async function handleBusinessCardFile(file){
+            try{
+                const { data: { user } } = await supa.auth.getUser();
+                if(!user){ alert('ログインが必要です'); return; }
+
+                const uuid = (crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2));
+                const path = `${user.id}/${uuid}.jpg`;
+                const { error: upErr } = await supa.storage.from('cards').upload(path, file, {
+                contentType: 'image/jpeg', upsert: false
+                });
+                if(upErr){ alert('アップロードに失敗しました'); return; }
+
+                const { data: me } = await supa.from('profiles').select('org_id').eq('id', user.id).single();
+                const { data: rec, error: insErr } = await supa.from('business_cards')
+                .insert({ org_id: me.org_id, image_path: path, created_by: user.id, status: 'uploaded' })
+                .select().single();
+                if(insErr){ alert('登録に失敗しました'); return; }
+
+                const { data: signed } = await supa.storage.from('cards').createSignedUrl(path, 60);
+                const imgUrl = signed?.signedUrl;
+                const worker = await Tesseract.createWorker();
+                const { data: { text } } = await worker.recognize(imgUrl, 'jpn+eng');
+                await worker.terminate();
+
+                const email = (text.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i) || [])[0] || null;
+                const phone = (text.match(/\+?\d[\d\- ()]{8,}\d/g) || [])[0] || null;
+                const name  = (text.split('\n').find(l => l.trim().length <= 12 && /[一-龠々]/.test(l)) || '').trim() || '（未抽出）';
+
+                await supa.from('business_cards')
+                .update({ ocr_json: { raw: text, name, email, phone }, status: 'parsed' })
+                .eq('id', rec.id);
+
+                if(email){
+                const { data: dup } = await supa.from('contacts').select('id').eq('email', email).maybeSingle();
+                if(dup){ alert('既存の担当者が見つかりました'); await loadAllData?.(); return; }
+                }
+
+                await supa.from('contacts').insert({
+                org_id: me.org_id, name, email, phone, account_id: null
+                });
+
+                await loadAllData?.();
+                alert('名刺から担当者を登録しました');
+            }catch(err){
+                console.error(err);
+                alert('名刺の取り込みに失敗しました');
+            }
         }
 
         
@@ -3279,5 +3405,25 @@
             }
 
     </script>
+    
+<!-- Camera Modal -->
+<div id="cameraModal" class="modal">
+  <div class="modal-content" style="max-width:720px;">
+    <div class="modal-header">
+      <h2 class="modal-title"><span class="material-icons">photo_camera</span> 名刺撮影</h2>
+      <button class="btn-icon" onclick="closeCamera()"><span class="material-icons">close</span></button>
+    </div>
+    <div class="modal-body">
+      <video id="cameraVideo" autoplay playsinline muted style="width:100%; border-radius:8px; background:#000;"></video>
+      <canvas id="cameraCanvas" style="display:none;"></canvas>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="cancelCameraBtn">キャンセル</button>
+      <button class="btn btn-primary" id="takePhotoBtn"><span class="material-icons">camera</span> 撮影して取り込む</button>
+    </div>
+  </div>
+</div>
+
+
 </body>
 </html>
