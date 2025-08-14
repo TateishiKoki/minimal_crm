@@ -66,6 +66,13 @@
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: var(--white);
         }
+        /* ★ PC折りたたみ */
+        .sidebar.collapsed { width: 72px; }
+        .sidebar.collapsed .nav-section-title { display: none; }
+        .sidebar.collapsed .user-info { display: none; }
+        .sidebar.collapsed .logo span:not(.material-icons) { display: none; }
+        .sidebar.collapsed .nav-link span:not(.material-icons-outlined) { display: none; }
+
 
         .logo {
             display: flex;
@@ -931,8 +938,20 @@
             .header-title { font-size: 1rem; }
             .btn { font-size: .85rem; }
         }
+        /* ヘッダーは最前面にして常にクリック可能に */
+        .header{
+        position: sticky;   /* 既にあればそのままでもOK */
+        top: 0;
+        z-index: 1003;      /* ★ 背景幕より上に */
+        background: var(--white);
+        }
 
-    
+        /* サイドバー（モバイル時はスライドインを既に採用しているはず） */
+        .sidebar{ z-index: 1002; }        /* ★ ヘッダーの次に上 */
+
+        /* 背景の半透明幕は一番下に（ヘッダーより下） */
+        .sidebar-backdrop{ z-index: 1001; } /* ★ これが低いとヘッダーが押せる */
+
     </style>
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -2147,32 +2166,6 @@
                 });
             }
 
-           // メニュートグル（置換版）
-            const menuToggle = document.getElementById('menuToggle');
-            if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
-
-            // オーバーレイで閉じる
-            document.getElementById('sidebarBackdrop')?.addEventListener('click', closeSidebar);
-
-            // Escで閉じる
-            window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSidebar(); });
-
-            // ナビクリックで自動クローズ（モバイル時のみ）
-            document.querySelectorAll('.nav-link').forEach(a=>{
-            a.addEventListener('click', ()=>{ if(isMobile()) closeSidebar(); });
-            });
-
-            // 画面遷移（ハッシュ変化）でも閉じる
-            window.addEventListener('hashchange', ()=>{ if(isMobile()) closeSidebar(); });
-
-            // リサイズでPC幅に戻ったら状態をリセット
-            window.addEventListener('resize', ()=>{
-            if(!isMobile()){
-                document.getElementById('sidebarBackdrop')?.classList.remove('active');
-                document.body.classList.remove('no-scroll');
-                document.getElementById('sidebar')?.classList.remove('active');
-            }
-            });
 
 
             // FABアイテムクリック
