@@ -1107,8 +1107,8 @@
                         <span class="material-icons">person</span>
                     </div>
                     <div class="user-details">
-                        <div class="user-name">山田 太郎</div>
-                        <div class="user-role">営業マネージャー</div>
+                        <div class="user-name" id="sidebarUserName"></div>
+                        <div class="user-role" id="sidebarUserRole"></div>
                     </div>
                 </div>
             </div>
@@ -1185,6 +1185,19 @@
                     </li>
                 </ul>
             </nav>
+
+            <nav class="nav-section">
+                <div class="nav-section-title">管理</div>
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                    <a href="#/users" class="nav-link" data-page="users">
+                        <span class="material-icons-outlined">admin_panel_settings</span>
+                        <span>権限管理</span>
+                    </a>
+                    </li>
+                </ul>
+            </nav>
+
         </aside>
 
         <!-- メインコンテンツ -->
@@ -1530,10 +1543,34 @@
         const SUPABASE_URL = "https://hbxlxgrwyktxpfomvsgy.supabase.co";        // 例: https://xxxxx.supabase.co
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhieGx4Z3J3eWt0eHBmb212c2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwNTQ3NTUsImV4cCI6MjA3MDYzMDc1NX0.xlYHz_bBmdHunmSZ9RCsjEXTcxQpN6uJag9KOjDS2Ug";
         const supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // 現在のログインプロファイルとRBAC定義
+        let currentProfile = null;
+        let orgSettings = { targetAmount: 50000000 };
+
+
+        const ROLE_LABEL = { admin: '管理者', manager: 'マネージャー', member: 'メンバー' };
+        const PERMS = {
+            dashboard:     ['member','manager','admin'],
+            opportunities: ['member','manager','admin'],
+            accounts:      ['member','manager','admin'],
+            contacts:      ['member','manager','admin'],
+            activities:    ['member','manager','admin'],
+            proposals:     ['member','manager','admin'],
+            quotes:        ['manager','admin'],
+            reports:       ['manager','admin'],
+            forecast:      ['manager','admin'],
+            users:         ['admin'] // 権限管理ページ
+        };
+        function roleAllowed(page, role) {
+            const allow = PERMS[page] || PERMS.dashboard;
+            return allow.includes(role || 'member');
+        }
+
         // ===== ルーター（#/login, #/register, #/dashboard …） =====
         const ROUTES = {
             login:        { auth: 'guest',  render: () => showAuth('login') },
             register:     { auth: 'guest',  render: () => showAuth('register') },
+            users: { auth: 'member', render: () => showApp('users') },
             dashboard:    { auth: 'member', render: () => showApp('dashboard') },
             opportunities:{ auth: 'member', render: () => showApp('opportunities') },
             accounts:     { auth: 'member', render: () => showApp('accounts') },
@@ -1582,6 +1619,18 @@
             if (route.auth === 'guest' && user) {
                 if (location.hash !== '#/dashboard') location.hash = '#/dashboard';
                 return;
+            }
+            if (route.auth === 'member') {
+                if (!currentProfile) {
+                // プロフィールを読み込んでサイドバー名/役割を反映
+                await fetchMyProfile();
+                }
+                const role = currentProfile?.role || 'member';
+                if (!roleAllowed(path, role)) {
+                // 権限の無いページに直接アクセスした場合はダッシュボードへ
+                location.hash = '#/dashboard';
+                return;
+                }
             }
             route.render();
         }
@@ -1754,34 +1803,108 @@
 
         // 組織＆プロファイルを初期化（存在しなければ作成）
         async function ensureOrgAndProfile() {
-        const { data: { user } } = await supa.auth.getUser();
-        if (!user) return;
+            const { data: { user } } = await supa.auth.getUser();
+            if (!user) return;
 
-        const { data: profile } = await supa
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
+            const { data: profile } = await supa
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
 
-        if (!profile) {
-            const { data: org, error: orgError } = await supa
-            .from('organizations')
-            .insert({ name: 'デモ組織' })
-            .select()
-            .single();
-            if (orgError) { console.error('組織作成エラー:', orgError); return; }
+            if (!profile) {
+                const displayName =
+                    user.user_metadata?.full_name
+                    || user.user_metadata?.name
+                    || user.email?.split('@')[0]
+                    || 'ユーザー';
 
-            const { error: profileError } = await supa
-            .from('profiles')
-            .insert({ id: user.id, org_id: org.id, email: user.email, name: '山田太郎' });
-            if (profileError) { console.error('プロファイル作成エラー:', profileError); }
+                const { data: org, error: orgError } = await supa
+                    .from('organizations')
+                    .insert({ name: 'マイ組織', target_amount: 50000000 })
+                    .select()
+                    .single();
+                if (orgError) { console.error('組織作成エラー:', orgError); return; }
+
+                const { error: profileError } = await supa
+                    .from('profiles')
+                    .insert({
+                    id: user.id,
+                    org_id: org.id,
+                    email: user.email,
+                    name: displayName,
+                    role: 'admin' // 初回ユーザーは管理者（必要なら'member'に）
+                    });
+                if (profileError) { console.error('プロファイル作成エラー:', profileError); }
+                }
+
         }
+
+        async function fetchMyProfile() {
+            const { data: { user } } = await supa.auth.getUser();
+            if (!user) { currentProfile = null; return null; }
+
+            const { data: p } = await supa
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+
+            currentProfile = p || null;
+
+            // サイドバーに反映
+            const nm = document.getElementById('sidebarUserName');
+            const rl = document.getElementById('sidebarUserRole');
+            if (nm) nm.textContent = (p?.name || user.user_metadata?.full_name || user.email);
+            if (rl) rl.textContent = ROLE_LABEL[p?.role] || 'メンバー';
+
+            applyRBACVisibility();
+            return currentProfile;
+            }
+
+        function applyRBACVisibility() {
+            const role = currentProfile?.role || 'member';
+            document.querySelectorAll('.nav-link').forEach(a => {
+                const page = a.dataset.page;
+                const li = a.closest('.nav-item');
+                if (!li || !page) return;
+                li.style.display = roleAllowed(page, role) ? '' : 'none';
+            });
+            }
+        // 組織設定の読み込み
+        async function loadOrgSettings() {
+            if (!currentProfile?.org_id) return;
+            const { data, error } = await supa
+                .from('organizations')
+                .select('id, target_amount')
+                .eq('id', currentProfile.org_id)
+                .single();
+            if (!error && data) {
+                orgSettings.targetAmount = data.target_amount ?? 50000000;
+            }
         }
+
+        // 目標金額の更新（admin/manager想定：RLSでadminのみ更新可にしているならadminで操作）
+        async function updateTargetAmount(newAmount) {
+            const orgId = currentProfile?.org_id;
+            const { error } = await supa
+                .from('organizations')
+                .update({ target_amount: newAmount })
+                .eq('id', orgId);
+            if (!error) {
+                orgSettings.targetAmount = newAmount;
+                renderForecastPage(); // 画面に反映
+            }
+            return { error };
+        }
+
 
 
         // アプリ初期化
         async function initializeApp() {
             await ensureOrgAndProfile();
+            await fetchMyProfile();
+            await loadOrgSettings();  // ← 追加（ここ！）
             await loadAllData();
             if (!location.hash) location.hash = '#/dashboard';
             handleRoute();
@@ -2068,6 +2191,9 @@
                 case 'forecast':
                     renderForecastPage();
                     break;
+                case 'users':
+                    renderUsersPage();
+                    break;
             }
         }
 
@@ -2172,7 +2298,7 @@
                 type: document.getElementById('oppType').value,
                 competitor: document.getElementById('oppCompetitor').value || null,
                 next_action: '初回連絡',
-                owner: '山田太郎',
+                owner: (currentProfile?.name || user.user_metadata?.full_name || user.email),
                 priority: 'medium'
             };
 
@@ -2671,28 +2797,125 @@
 
         function renderForecastPage() {
             const content = document.getElementById('content');
-            const total = dataStore.opportunities.reduce((s,o)=>s+o.amount*(o.probability/100),0);
+
+            const total = dataStore.opportunities
+                .reduce((s,o)=> s + ((o.amount||0) * ((o.probability||0)/100)), 0);
+
+            const target = orgSettings.targetAmount || 1; // 0割防止
+            const rate = Math.min(100, (total / target) * 100);
+            const canEdit = ['admin','manager'].includes(currentProfile?.role); // UI出し分け
+
             content.innerHTML = `
                 <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">
-                            <span class="material-icons-outlined">show_chart</span>
-                            売上予測
-                        </h2>
+                <div class="card-header">
+                    <h2 class="card-title">
+                    <span class="material-icons-outlined">show_chart</span>
+                    売上予測
+                    </h2>
+                </div>
+                <div class="card-body">
+                    <div class="detail-section">
+                    <div class="detail-title"><span class="material-icons">calculate</span> 確度加重合計</div>
+                    <div class="stat-value">¥${Math.round(total).toLocaleString()}</div>
+
+                    <div class="progress" style="max-width:400px;margin-top:.75rem;">
+                        <div class="progress-bar" style="width:${rate}%"></div>
                     </div>
-                    <div class="card-body">
-                        <div class="detail-section">
-                            <div class="detail-title"><span class="material-icons">calculate</span> 確度加重合計</div>
-                            <div class="stat-value">¥${Math.round(total).toLocaleString()}</div>
-                            <div class="progress" style="max-width:400px;margin-top:.75rem;">
-                                <div class="progress-bar" style="width:${Math.min(100, (total/50000000)*100)}%"></div>
-                            </div>
-                            <div class="stat-label">目標：¥50,000,000</div>
-                        </div>
+
+                    <div class="stat-label" style="display:flex;align-items:center;gap:.5rem;">
+                        目標：¥<span id="targetAmountText">${target.toLocaleString()}</span>
+                        ${canEdit ? `
+                        <button class="btn btn-secondary" id="editTargetBtn">
+                            <span class="material-icons-outlined">edit</span> 編集
+                        </button>` : ``}
+                    </div>
                     </div>
                 </div>
+                </div>
             `;
+
+            const btn = document.getElementById('editTargetBtn');
+            if (btn) {
+                btn.addEventListener('click', async () => {
+                const val = prompt('目標金額（円）を入力', String(target));
+                if (val == null) return;
+                const n = parseInt(String(val).replace(/[^\d]/g,''), 10);
+                if (!Number.isFinite(n) || n <= 0) {
+                    alert('正しい金額を入力してください'); return;
+                }
+                const { error } = await updateTargetAmount(n);
+                if (error) alert('更新に失敗しました: ' + error.message);
+                });
+            }
         }
+
+
+        async function renderUsersPage() {
+            const content = document.getElementById('content');
+            const orgId = currentProfile?.org_id;
+
+            const { data: members } = await supa
+                .from('profiles')
+                .select('id, name, email, role, org_id')
+                .eq('org_id', orgId)
+                .order('created_at',{ascending:true});
+
+            content.innerHTML = `
+                <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                    <span class="material-icons-outlined">admin_panel_settings</span> 権限管理
+                    </h2>
+                </div>
+                <div class="card-body">
+                    <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr><th>氏名</th><th>メール</th><th>役割</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                        ${(members||[]).map(m => `
+                            <tr data-id="${m.id}">
+                            <td>${m.name || '—'}</td>
+                            <td>${m.email}</td>
+                            <td>
+                                <select class="form-select role-select">
+                                ${['member','manager','admin'].map(r =>
+                                    `<option value="${r}" ${m.role===r?'selected':''}>${ROLE_LABEL[r]}</option>`
+                                ).join('')}
+                                </select>
+                            </td>
+                            <td><button class="btn btn-primary btn-update-role">更新</button></td>
+                            </tr>
+                        `).join('')}
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+                </div>
+            `;
+
+            content.querySelectorAll('.btn-update-role').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                const tr = e.currentTarget.closest('tr');
+                const uid = tr.dataset.id;
+                const newRole = tr.querySelector('.role-select').value;
+
+                if ((currentProfile?.role !== 'admin') && uid !== currentProfile?.id) {
+                    alert('権限の更新は管理者のみ可能です'); return;
+                }
+                const { error } = await supa
+                    .from('profiles')
+                    .update({ role: newRole })
+                    .eq('id', uid)
+                    .eq('org_id', currentProfile.org_id);
+                if (error) { alert('更新に失敗しました: ' + error.message); return; }
+                if (uid === currentProfile.id) { currentProfile.role = newRole; applyRBACVisibility(); }
+                alert('更新しました');
+                });
+            });
+        }
+
         
         // 取引先登録モーダルを追加（opportunityModalの後に）
         function createAccountModal() {
