@@ -72,6 +72,8 @@
         .sidebar.collapsed .user-info { display: none; }
         .sidebar.collapsed .logo span:not(.material-icons) { display: none; }
         .sidebar.collapsed .nav-link span:not(.material-icons-outlined) { display: none; }
+        .sidebar.collapsed .nav-badge { display: none; }
+
 
 
         .logo {
@@ -861,96 +863,83 @@
             }
         }
 
-        /* レスポンシブ */
-        /* モバイル時のサイドバー（スライドイン） */
+       /* =======================
+   Responsive & Layering（置換用）
+   ======================= */
+
+        /* ヘッダー（PCデフォルトで最前面） */
+        .header{
+        position: sticky;
+        top: 0;
+        z-index: 1003;
+        background: var(--white);
+        }
+
+        /* 背景オーバーレイ（共通の見た目） */
+        .sidebar-backdrop{
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.25);
+        opacity: 0;
+        pointer-events: none;
+        transition: var(--transition);
+        }
+        .sidebar-backdrop.active{ opacity: 1; pointer-events: auto; }
+
+        /* 背景スクロール抑止 */
+        body.no-scroll{ overflow: hidden; }
+
+        /* ── デスクトップ（>=1025px） ───────────────────────────── */
+        @media (min-width: 1025px){
+        .sidebar{ z-index: 1002; }         /* ヘッダー(1003)のすぐ下 */
+        .sidebar-backdrop{ z-index: 1001; }/* ヘッダーより下（クリック妨げない） */
+        }
+
+        /* ── モバイル（<=1024px） ──────────────────────────────── */
         @media (max-width: 1024px){
         .sidebar{
             position: fixed; left: 0; top: 0; bottom: 0;
             width: 80vw; max-width: 320px; height: 100vh;
             transform: translateX(-100%);
-            transition: var(--transition); z-index: 999;
+            transition: var(--transition);
             box-shadow: 2px 0 8px rgba(0,0,0,0.1);
-            }
-            .sidebar.active{ transform: translateX(0); 
-            }
-            .opportunity-detail {
-                grid-template-columns: 1fr;
-            }
+            z-index: 2002;                    /* 最前面（ヘッダーより上） */
+        }
+        .sidebar.active{ transform: translateX(0); }
+
+        .sidebar-backdrop{ z-index: 2001; } /* ヘッダーより前（ヘッダーもブロック） */
+        .header{ z-index: 900; }            /* モバイル時だけ一段下げる */
+
+        /* 既存のレイアウト調整 */
+        .opportunity-detail { grid-template-columns: 1fr; }
         }
 
-        @media (max-width: 768px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-
-            .search-container {
-                width: 200px;
-            }
-
-            .content {
-                padding: 1rem;
-            }
+        /* ── タブレット以下のレイアウト補助 ─────────────────────── */
+        @media (max-width: 768px){
+        .stats-grid { grid-template-columns: 1fr; }
+        .form-row   { grid-template-columns: 1fr; }
+        .search-container { width: 200px; }
+        .content { padding: 1rem; }
         }
 
-        /* カスタムスクロールバー */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--light-gray);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #B0BEC5;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--gray);
-        }
-        /* 画面固定（サイドバー展開中の背後スクロール防止） */
-        body.no-scroll { overflow: hidden; }
-
-        /* サイドバーのオーバーレイ */
-        .sidebar-backdrop{
-        position: fixed; inset: 0;
-        background: rgba(0,0,0,.25);
-        opacity: 0; pointer-events: none;
-        transition: var(--transition); z-index: 998;
-        }
-        .sidebar-backdrop.active{ opacity: 1; pointer-events: auto; }
-
-        /* スマホ微調整（任意） */
+        /* ── スマホ細かい調整 ─────────────────────────────────── */
         @media (max-width: 600px){
-            .header { gap: 1rem; padding: .75rem 1rem; }
-            .search-container { width: 100%; max-width: 220px; }
-            .stats-grid { grid-template-columns: 1fr; }
-            .card-header { padding: .75rem 1rem; }
-            .card-body { padding: 1rem; }
+        .header { gap: 1rem; padding: .75rem 1rem; }
+        .search-container { width: 100%; max-width: 220px; }
+        .stats-grid { grid-template-columns: 1fr; }
+        .card-header { padding: .75rem 1rem; }
+        .card-body { padding: 1rem; }
         }
         @media (max-width: 390px){
-            .header-title { font-size: 1rem; }
-            .btn { font-size: .85rem; }
-        }
-        /* ヘッダーは最前面にして常にクリック可能に */
-        .header{
-        position: sticky;   /* 既にあればそのままでもOK */
-        top: 0;
-        z-index: 1003;      /* ★ 背景幕より上に */
-        background: var(--white);
+        .header-title { font-size: 1rem; }
+        .btn { font-size: .85rem; }
         }
 
-        /* サイドバー（モバイル時はスライドインを既に採用しているはず） */
-        .sidebar{ z-index: 1002; }        /* ★ ヘッダーの次に上 */
-
-        /* 背景の半透明幕は一番下に（ヘッダーより下） */
-        .sidebar-backdrop{ z-index: 1001; } /* ★ これが低いとヘッダーが押せる */
+        /* ── カスタムスクロールバー（任意） ─────────────────────── */
+        ::-webkit-scrollbar{ width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track{ background: var(--light-gray); }
+        ::-webkit-scrollbar-thumb{ background: #B0BEC5; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover{ background: var(--gray); }
 
     </style>
     <!-- Chart.js CDN -->
@@ -2112,16 +2101,50 @@
         function openSidebar(){
             const s = document.getElementById('sidebar');
             const b = document.getElementById('sidebarBackdrop');
-            s?.classList.add('active'); b?.classList.add('active'); document.body.classList.add('no-scroll');
+            if (isMobile()) {
+                // モバイル：スライドイン
+                s?.classList.add('active');
+                b?.classList.add('active');
+                document.body.classList.add('no-scroll');
+            } else {
+                // PC：展開＝collapsed解除
+                s?.classList.remove('collapsed');
+                // 念のためモバイル状態を掃除
+                s?.classList.remove('active');
+                b?.classList.remove('active');
+                document.body.classList.remove('no-scroll');
+            }
         }
         function closeSidebar(){
             const s = document.getElementById('sidebar');
             const b = document.getElementById('sidebarBackdrop');
-            s?.classList.remove('active'); b?.classList.remove('active'); document.body.classList.remove('no-scroll');
+            if (isMobile()) {
+                // モバイル：スライドアウト
+                s?.classList.remove('active');
+                b?.classList.remove('active');
+                document.body.classList.remove('no-scroll');
+            } else {
+                // PC：折りたたみ＝collapsed付与
+                s?.classList.add('collapsed');
+                // 念のためモバイル状態を掃除
+                s?.classList.remove('active');
+                b?.classList.remove('active');
+                document.body.classList.remove('no-scroll');
+            }
         }
+
         function toggleSidebar(){
             const s = document.getElementById('sidebar');
-            s?.classList.contains('active') ? closeSidebar() : openSidebar();
+            if (isMobile()) {
+                s?.classList.contains('active') ? closeSidebar() : openSidebar();
+            } else {
+                // PCは collapsed をトグル
+                s?.classList.toggle('collapsed');
+                // モバイル用状態は常にオフ
+                s?.classList.remove('active');
+                document.getElementById('sidebarBackdrop')?.classList.remove('active');
+                document.body.classList.remove('no-scroll');
+            }
         }
         
         // 既存のmenuToggleハンドラはこれに置き換え
@@ -2141,13 +2164,22 @@
         window.addEventListener('hashchange', ()=>{ if(isMobile()) closeSidebar(); });
 
         // リサイズ時にPC幅に戻ったら状態をリセット
+        // リサイズ時：PCに戻ったらモバイル状態を掃除、モバイルに戻ったらcollapsedを外す
         window.addEventListener('resize', ()=>{
-        if(!isMobile()) { 
-            document.getElementById('sidebarBackdrop')?.classList.remove('active');
+        const s = document.getElementById('sidebar');
+        const b = document.getElementById('sidebarBackdrop');
+        if (!isMobile()) {
+            // PC：バックドロップやno-scrollは不要
+            b?.classList.remove('active');
             document.body.classList.remove('no-scroll');
-            document.getElementById('sidebar')?.classList.remove('active');
+            s?.classList.remove('active');   // モバイルのactiveを確実に外す
+            // （collapsedはPCで使うので触らない）
+        } else {
+            // モバイル：細いままを防ぐためcollapsedは外す
+            s?.classList.remove('collapsed');
         }
         });
+
 
 
 
