@@ -855,19 +855,17 @@
         }
 
         /* レスポンシブ */
-        @media (max-width: 1024px) {
-            .sidebar {
-                position: fixed;
-                left: -280px;
-                height: 100vh;
-                z-index: 999;
-                box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+        /* モバイル時のサイドバー（スライドイン） */
+        @media (max-width: 1024px){
+        .sidebar{
+            position: fixed; left: 0; top: 0; bottom: 0;
+            width: 80vw; max-width: 320px; height: 100vh;
+            transform: translateX(-100%);
+            transition: var(--transition); z-index: 999;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.1);
             }
-
-            .sidebar.active {
-                left: 0;
+            .sidebar.active{ transform: translateX(0); 
             }
-
             .opportunity-detail {
                 grid-template-columns: 1fr;
             }
@@ -908,6 +906,26 @@
 
         ::-webkit-scrollbar-thumb:hover {
             background: var(--gray);
+        }
+        /* 画面固定（サイドバー展開中の背後スクロール防止） */
+        body.no-scroll { overflow: hidden; }
+
+        /* サイドバーのオーバーレイ */
+        .sidebar-backdrop{
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,.25);
+        opacity: 0; pointer-events: none;
+        transition: var(--transition); z-index: 998;
+        }
+        .sidebar-backdrop.active{ opacity: 1; pointer-events: auto; }
+
+        /* スマホ微調整（任意） */
+        @media (max-width: 600px){
+            .header { gap: 1rem; padding: .75rem 1rem; }
+            .search-container { width: 100%; max-width: 220px; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .card-header { padding: .75rem 1rem; }
+            .card-body { padding: 1rem; }
         }
 
     
@@ -1197,8 +1215,8 @@
                     </li>
                 </ul>
             </nav>
-
         </aside>
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
         <!-- メインコンテンツ -->
         <main class="main-content">
@@ -1870,7 +1888,19 @@
                 if (!li || !page) return;
                 li.style.display = roleAllowed(page, role) ? '' : 'none';
             });
+            document.querySelectorAll('.nav-section').forEach(sec => {
+                const anyVisible = [...sec.querySelectorAll('.nav-item')]
+                .some(li => li.style.display !== 'none');
+                sec.style.display = anyVisible ? '' : 'none';
+                });
+            document.querySelectorAll('.nav-section').forEach(sec => {
+                const anyVisible = [...sec.querySelectorAll('.nav-item')]
+                .some(li => li.style.display !== 'none');
+                sec.style.display = anyVisible ? '' : 'none';
+                });
             }
+
+
         // 組織設定の読み込み
         async function loadOrgSettings() {
             if (!currentProfile?.org_id) return;
@@ -2051,7 +2081,25 @@
         }
 
 
-        
+        function isMobile(){ return window.innerWidth <= 1024; }
+
+        function openSidebar(){
+            const s = document.getElementById('sidebar');
+            const b = document.getElementById('sidebarBackdrop');
+            s?.classList.add('active'); b?.classList.add('active'); document.body.classList.add('no-scroll');
+        }
+        function closeSidebar(){
+            const s = document.getElementById('sidebar');
+            const b = document.getElementById('sidebarBackdrop');
+            s?.classList.remove('active'); b?.classList.remove('active'); document.body.classList.remove('no-scroll');
+        }
+        function toggleSidebar(){
+            const s = document.getElementById('sidebar');
+            s?.classList.contains('active') ? closeSidebar() : openSidebar();
+        }
+
+
+
         // イベントリスナー初期化
         function initializeEventListeners() {
             // FABメニュー
@@ -2067,14 +2115,33 @@
                 });
             }
 
-            // メニュートグル
+           // メニュートグル（置換版）
             const menuToggle = document.getElementById('menuToggle');
-            if (menuToggle) {
-                menuToggle.addEventListener('click', () => {
-                const sidebar = document.getElementById('sidebar');
-                if (sidebar) sidebar.classList.toggle('active');
-                });
+            if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
+
+            // オーバーレイで閉じる
+            document.getElementById('sidebarBackdrop')?.addEventListener('click', closeSidebar);
+
+            // Escで閉じる
+            window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSidebar(); });
+
+            // ナビクリックで自動クローズ（モバイル時のみ）
+            document.querySelectorAll('.nav-link').forEach(a=>{
+            a.addEventListener('click', ()=>{ if(isMobile()) closeSidebar(); });
+            });
+
+            // 画面遷移（ハッシュ変化）でも閉じる
+            window.addEventListener('hashchange', ()=>{ if(isMobile()) closeSidebar(); });
+
+            // リサイズでPC幅に戻ったら状態をリセット
+            window.addEventListener('resize', ()=>{
+            if(!isMobile()){
+                document.getElementById('sidebarBackdrop')?.classList.remove('active');
+                document.body.classList.remove('no-scroll');
+                document.getElementById('sidebar')?.classList.remove('active');
             }
+            });
+
 
             // FABアイテムクリック
             document.querySelectorAll('.fab-item').forEach((item, index) => {
