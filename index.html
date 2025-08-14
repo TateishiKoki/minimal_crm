@@ -927,11 +927,16 @@
             .card-header { padding: .75rem 1rem; }
             .card-body { padding: 1rem; }
         }
+        @media (max-width: 390px){
+            .header-title { font-size: 1rem; }
+            .btn { font-size: .85rem; }
+        }
 
     
     </style>
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
         <!-- ログイン画面（<body>タグの直後に追加） -->
@@ -1447,6 +1452,8 @@
                 </div>
             </div>
         </main>
+        <input type="file" id="cardInput" accept="image/*" capture="environment" style="display:none;">
+
     </div>
 
     <!-- クイックアクション -->
@@ -2097,6 +2104,31 @@
             const s = document.getElementById('sidebar');
             s?.classList.contains('active') ? closeSidebar() : openSidebar();
         }
+        
+        // 既存のmenuToggleハンドラはこれに置き換え
+        const menuToggle = document.getElementById('menuToggle');
+        if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
+
+        // オーバーレイ／Escで閉じる
+        document.getElementById('sidebarBackdrop')?.addEventListener('click', closeSidebar);
+        window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSidebar(); });
+
+        // ナビクリックで自動クローズ（モバイル時のみ）
+        document.querySelectorAll('.nav-link').forEach(a=>{
+        a.addEventListener('click', ()=>{ if(isMobile()) closeSidebar(); });
+        });
+
+        // 画面遷移（ハッシュ変化）でも閉じる
+        window.addEventListener('hashchange', ()=>{ if(isMobile()) closeSidebar(); });
+
+        // リサイズ時にPC幅に戻ったら状態をリセット
+        window.addEventListener('resize', ()=>{
+        if(!isMobile()) { 
+            document.getElementById('sidebarBackdrop')?.classList.remove('active');
+            document.body.classList.remove('no-scroll');
+            document.getElementById('sidebar')?.classList.remove('active');
+        }
+        });
 
 
 
@@ -2184,6 +2216,76 @@
                 }, { passive: true });
             });
         }
+        function wireBusinessCardInputOnce() {
+            const input = document.getElementById('cardInput');
+            if (!input || input.dataset.wired === '1') return; // 二重登録防止
+            input.dataset.wired = '1';
+
+            input.addEventListener('change', async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                // 同じファイルを続けて選べるように
+                e.target.value = '';
+
+                const { data: { user } } = await supa.auth.getUser();
+                if (!user) { alert('ログインが必要です'); return; }
+
+                // 1) 画像を Storage に保存
+                const uuid = (crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2));
+                const fileName = `${uuid}.jpg`;
+                const { error: upErr } = await supa.storage.from('cards').upload(fileName, file);
+                if (upErr) { alert('アップロードに失敗しました'); return; }
+
+                // 2) DBにレコード作成（OCR前）
+                const { data: me } = await supa.from('profiles').select('org_id').eq('id', user.id).single();
+                const { data: rec, error: insErr } = await supa.from('business_cards')
+                .insert({ org_id: me.org_id, image_path: fileName, created_by: user.id })
+                .select().single();
+                if (insErr) { alert('登録に失敗しました'); return; }
+
+                // 3) OCR 実行（Public バケット想定）
+                let imgUrl = supa.storage.from('cards').getPublicUrl(fileName).data.publicUrl;
+
+                // ※ cards バケットを Private にした場合はこちらを使う：
+                // const { data: signed } = await supa.storage.from('cards').createSignedUrl(fileName, 60);
+                // let imgUrl = signed?.signedUrl;
+
+                const worker = await Tesseract.createWorker();
+                const { data: { text } } = await worker.recognize(imgUrl, 'jpn+eng');
+                await worker.terminate();
+
+                // 4) ざっくり抽出（MVP）
+                const email = (text.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i) || [])[0] || null;
+                const phone = (text.match(/\+?\d[\d\- ()]{8,}\d/g) || [])[0] || null;
+                const name  = (text.split('\n').find(l => l.trim().length <= 12 && /[一-龠々]/.test(l)) || '').trim();
+
+                await supa.from('business_cards')
+                .update({ ocr_json: { raw: text, name, email, phone }, status: 'parsed' })
+                .eq('id', rec.id);
+
+                // 5) 既存チェック（メール重複）
+                if (email) {
+                const { data: dup } = await supa.from('contacts').select('id').eq('email', email).maybeSingle();
+                if (dup) { alert('既存の担当者が見つかりました'); return; }
+                }
+
+                // 6) 担当者作成（最低限）
+                const { error: cErr } = await supa.from('contacts').insert({
+                org_id: me.org_id, name, email, phone, account_id: null
+                });
+                if (cErr) { alert('担当者作成に失敗しました'); return; }
+
+                // 必要なら再読込
+                await loadAllData?.();
+                alert('名刺から担当者を登録しました');
+            });
+            }
+
+            // DOM構築後に一度だけ実行（initializeEventListenersの最後でもOK）
+            document.addEventListener('DOMContentLoaded', () => {
+            wireBusinessCardInputOnce();
+            });
+
 
 
         // ページナビゲーション
@@ -2643,47 +2745,53 @@
             const content = document.getElementById('content');
             content.innerHTML = `
                 <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">
-                            <span class="material-icons-outlined">contacts</span>
-                            担当者一覧
-                        </h2>
-                        <button class="btn btn-primary" onclick="openModal('opportunityModal')">
-                            <span class="material-icons">person_add</span>
-                            新規担当者
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>氏名</th>
-                                        <th>取引先</th>
-                                        <th>役職</th>
-                                        <th>メール</th>
-                                        <th>電話</th>
-                                        <th>決裁者</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${dataStore.contacts.map(c => `
-                                        <tr>
-                                            <td>${c.name}</td>
-                                            <td>${c.account}</td>
-                                            <td>${c.title}</td>
-                                            <td><a href="mailto:${c.email}">${c.email}</a></td>
-                                            <td>${c.phone}</td>
-                                            <td>${c.decisionMaker ? '<span class="badge badge-primary">はい</span>' : '—'}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
+                <div class="card-header">
+                    <h2 class="card-title">
+                    <span class="material-icons-outlined">contacts</span>
+                    担当者一覧
+                    </h2>
+                    <div style="display:flex; gap:.5rem;">
+                    <!-- ★ 追加：名刺取り込み -->
+                    <button class="btn btn-secondary" id="captureCardBtn">
+                        <span class="material-icons">photo_camera</span> 名刺を取り込む
+                    </button>
+                    <button class="btn btn-primary" onclick="openModal('opportunityModal')">
+                        <span class="material-icons">person_add</span> 新規担当者
+                    </button>
                     </div>
                 </div>
+                <div class="card-body">
+                    <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>氏名</th><th>取引先</th><th>役職</th><th>メール</th><th>電話</th><th>決裁者</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        ${dataStore.contacts.map(c => `
+                            <tr>
+                            <td>${c.name}</td>
+                            <td>${c.account}</td>
+                            <td>${c.title}</td>
+                            <td><a href="mailto:${c.email}">${c.email}</a></td>
+                            <td>${c.phone}</td>
+                            <td>${c.decisionMaker ? '<span class="badge badge-primary">はい</span>' : '—'}</td>
+                            </tr>
+                        `).join('')}
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+                </div>
             `;
+
+            // ★ ページ描画後にボタン→ファイル入力を開く
+            document.getElementById('captureCardBtn')?.addEventListener('click', ()=>{
+                document.getElementById('cardInput')?.click();
+            });
         }
+
 
         function renderActivitiesPage() {
             const content = document.getElementById('content');
